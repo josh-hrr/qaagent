@@ -1,0 +1,128 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Design tokens — the single source of truth for the whole app.
+   Lifted from the design canvas in /design; change them here, not inline.
+   --------------------------------------------------------------------------- */
+
+@theme {
+  /* Surfaces, darkest to lightest */
+  --color-ink-900: #0b0d0f; /* page ground */
+  --color-ink-800: #0e1114; /* panel */
+  --color-ink-700: #111417; /* raised panel */
+  --color-ink-600: #151a1e; /* row hover / selected */
+  --color-ink-500: #171b1f; /* control */
+
+  /* Hairlines and borders */
+  --color-edge: #1f262c;
+  --color-edge-strong: #2a333a;
+  --color-edge-field: #262e35;
+
+  /* Type */
+  --color-fg: #f1f5f8;
+  --color-fg-bright: #f5f8fa;
+  --color-fg-muted: #c8d2da;
+  --color-fg-dim: #94a2ad;
+  --color-fg-dimmer: #7d8b96;
+  --color-fg-faint: #5e6b75;
+  --color-fg-ghost: #39434b;
+
+  /* Signal — the one accent that carries every primary action */
+  --color-signal: #b4e33f;
+  --color-signal-bright: #d3f27e;
+  --color-signal-dim: #8fb534;
+  --color-signal-bg: #1a2410;
+  --color-signal-bg-strong: #1e2a10;
+  --color-signal-edge: #3a5418;
+
+  /* Semantic */
+  --color-info: #5aa9f0;
+  --color-info-bg: #0f1e2b;
+  --color-info-edge: #1e3c56;
+  --color-warn: #e8a33d;
+  --color-warn-bg: #2a1e0c;
+  --color-warn-edge: #553c15;
+  --color-danger: #f2564d;
+  --color-danger-bg: #2b1110;
+  --color-danger-edge: #5a201c;
+
+  /* Type families */
+  --font-display: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+
+  /* Control heights — this is a dense desktop tool, not a phone app */
+  --spacing-control: 2.25rem; /* 36px */
+  --spacing-control-sm: 1.875rem; /* 30px */
+  --spacing-control-lg: 2.75rem; /* 44px */
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-ink-900);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  a {
+    color: var(--color-signal);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--color-signal-bright);
+  }
+
+  /* Never leave a keyboard user guessing where they are. */
+  :focus-visible {
+    outline: 2px solid var(--color-signal);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--color-signal);
+    color: var(--color-ink-900);
+  }
+
+  input::placeholder {
+    color: var(--color-fg-faint);
+  }
+}
+
+@layer components {
+  /* The uppercase mono micro-label used throughout the design. */
+  .label-micro {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--color-fg-faint);
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-edge-strong) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

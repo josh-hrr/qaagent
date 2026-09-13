@@ -1,0 +1,291 @@
+# QA Agent
+
+Internal tool that turns a Linear ticket **and the code diff that implements it**
+into reviewed manual test cases — flagging code it doesn't trust and requirements
+it can't pin down.
+
+```
+backend/    Django 6 + DRF API
+frontend/   React 19 + TypeScript + Tailwind 4 (Vite)
+design/     Design canvas — 11 screens of the Phase 1 flow
+docs/       Notes, starting with the original brief
+```
+
+## Running it
+
+Two terminals. The Vite dev server proxies `/api` to Django, so both apps share
+an origin and the session cookie behaves exactly as it will in production.
+
+**Backend** — http://127.0.0.1:8000
+
+```bash
+cd backend
+python -m venv .venv
+.venv/Scripts/activate          # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+python manage.py migrate
+python manage.py runserver
+```
+
+**Frontend** — http://localhost:5173
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 and you land on the sign-in screen.
+
+## Signing in during development
+
+No SMTP server is needed. The quickest way in — skips email entirely and prints
+one clean line:
+
+```bash
+cd backend
+python manage.py signin_link you@yourcompany.com
+```
+
+Open the URL it prints. The account is created on first successful sign-in. The
+command refuses to run unless `DJANGO_DEBUG=true`, so it can never become a back
+door on a real deployment.
+
+The full flow works too: type any address on the sign-in screen and
+`EMAIL_URL=consolemail://` prints the email to the Django console. Note the URL
+there is quoted-printable encoded and wraps across lines — `=` becomes `=3D` and
+a trailing `=` is a soft line break — so join the pieces before opening it. Point
+`EMAIL_URL` at a catcher like Mailpit to avoid that.
+
+## Current state
+
+| # | Screen | Status |
+|---|--------|--------|
+| 01 | Sign in | **built** — frontend + API + tests |
+| 02 | Connect Linear | **built** — `/setup/project-management` |
+| 03 | Connect repository | **built** — `/setup/source-code` |
+| 04 | Pick a ticket | **built** — `/tickets` |
+| 05 | Generation run | designed |
+| 06 | Review workspace | designed |
+| 07 | Export CSV / Markdown | designed |
+
+Screens 02–07 and the empty/error states live in the design canvas
+(`design/qa-agent-phase-1.html`, or the hosted version). Build order follows the
+numbering.
+
+## How auth works
+
+An **httpOnly session cookie**, not a token in JavaScript. Chosen because this is
+an internal tool that will sit behind SSO: the SSO callbacks land on Django and
+can establish the session directly, and nothing sensitive is reachable from page
+scripts.
+
+- `GET  /api/auth/options/` — which sign-in methods work, plus the CSRF cookie
+- `POST /api/auth/magic-link/` — request a link
+- `POST /api/auth/magic-link/verify/` — exchange the link for a session
+- `GET  /api/auth/session/` — the signed-in user, or 403
+- `POST /api/auth/sign-out/`
+- `GET  /api/auth/sso/<provider>/start/` — 501 until credentials are configured
+
+Worth knowing:
+
+- Magic-link tokens are stored **hashed**. The raw value exists only in the
+  email, works once, and expires in 15 minutes. Requesting a new link
+  invalidates the previous one.
+- `POST /magic-link/` answers identically for known and unknown addresses, so it
+  cannot be used to enumerate the team.
+- Rate limited per address and per IP, counted from the token table so a restart
+  does not reset it.
+- CSRF is enforced on the unauthenticated sign-in POSTs. DRF marks `@api_view`
+  handlers `csrf_exempt` and only re-checks CSRF inside `SessionAuthentication`,
+  which never runs without a session — leaving login CSRF open by default. See
+  `accounts/permissions.py`.
+- The sign-in screen renders from `/options/`: with no SSO configured, the email
+  form becomes the primary action instead of leaving a dead button on top. Add a
+  client id and secret to `backend/.env` and the provider button turns on.
+
+## Connecting Linear (screen 02)
+
+`/setup/project-management`. Paste a Linear personal API key (Linear → Settings →
+Security & access → Personal API keys), pick which teams to sync, connect.
+
+Check a key against real Linear without touching the app:
+
+```bash
+cd backend
+python manage.py linear_check lin_api_xxx
+```
+
+How it is put together:
+
+- **Verify and connect are separate calls.** Verify checks the key and lists its
+  teams while storing nothing, so you choose teams from your real workspace and a
+  typo never leaves a broken row behind. Connect re-verifies, because the two
+  requests are minutes apart and a key can be revoked in between.
+- **One connection per provider, shared by the team** — matching "stored per
+  workspace, never per user". Revoking happens in one place. Add a `workspace`
+  foreign key if this ever needs to be multi-tenant.
+- **Teams are rows, not a list of ids**, so the ticket picker in screen 04 can
+  join against names and keys without another Linear round trip.
+- The GraphQL queries request only fields the code reads. Ticket-level fields
+  arrive in screen 04, against a schema verifiable with a real key by then.
+
+### Credential storage
+
+The Linear key is a live credential for someone else's system — a leak hands an
+attacker your ticket tracker, not just this app.
+
+- **Encrypted at rest** with Fernet (`connections/crypto.py`) before it touches
+  the database.
+- **Keyed on `CREDENTIAL_ENCRYPTION_KEY`, not `SECRET_KEY`.** Deliberate:
+  rotating `SECRET_KEY` is the break-glass that signs everyone out, and it must
+  not also render every stored credential unreadable. Generate one with
+  `python manage.py generate_encryption_key`; required outside development.
+- **Write-only from the client's side.** The serializer has no field for it, so
+  it cannot leak by someone adding one carelessly later. The API returns only a
+  stub like `lin_api_...7Kd2`. You can replace the key, never read it back.
+- The Django admin excludes the field entirely — no reason for a live
+  third-party credential to travel to a browser page.
+
+## Connecting a repository (screen 03)
+
+`/setup/source-code`. Organisation, optional project, personal access token
+(read-only Code + Work Items scopes), pick repositories, choose the diff-scope
+rule.
+
+Check a token against real Azure DevOps without touching the app:
+
+```bash
+cd backend
+python manage.py azure_check yourcompany --pat xxx
+python manage.py azure_check yourcompany --project "Core Platform" --pat xxx
+```
+
+**Diff scope is the decision that matters.** A ticket has no code scope until
+something maps it to a diff, and getting it wrong means every test case is
+generated against the wrong code. The rule is explicit rather than guessed:
+linked PR first, then a branch carrying the ticket ID, then ask. Stored per
+connection, because a GitHub org and an Azure org may genuinely differ in
+whether their teams open pull requests before asking for tests.
+
+**Nothing is cloned at connect time.** The run pipeline clones into a throwaway
+container. `last_indexed_commit` stays empty until then, so the UI says "not
+cloned yet" rather than claiming an index that does not exist.
+
+**How much code a run reads** is decided by the agent, not by a fixed rule — see
+[`docs/decisions/0001-scope-expansion.md`](docs/decisions/0001-scope-expansion.md).
+It starts from the diff and follows the change into whatever it affects, bounded
+by hop, file and token limits. Repositories are deliberately not indexed ahead of
+time, because scope depends on the diff.
+
+### Azure DevOps auth traps
+
+All confirmed against the live API, and all of them make an invalid token look
+like a valid one:
+
+- A bad PAT never returns 401. Depending on endpoint it is `203`, or a `302` to
+  a sign-in page, or HTML with a 200.
+- Worse, `connectionData` returns a clean **200 with an anonymous identity**
+  (`aaaaaaaa-…`, display name `Anonymous`). The status code alone cannot tell
+  you the token works — the identity has to be checked, or a dead credential is
+  stored and only fails on the first real run.
+- API versions are **per endpoint**: `connectionData` is preview-only and
+  rejects `api-version=7.1`, needing `7.1-preview`; `git/repositories` is GA at
+  `7.1`.
+
+### Request forgery
+
+The organisation and project names come from the user and land in a URL the
+server calls. They are validated before use (`normalize_organization`) — bare
+name, `dev.azure.com/<org>`, or legacy `<org>.visualstudio.com`, nothing else.
+A value like `evil.com/yourcompany` or `yourcompany/../other` is refused rather
+than silently trimmed, and redirects are never followed, because following one
+would replay the `Authorization` header — and the PAT — at whatever host the
+response names.
+
+## Picking a ticket (screen 04)
+
+`/tickets`. Reads live from Linear — nothing is stored. Tickets change, and
+generating tests from a stale copy is worse than not generating them.
+
+Every field in the query was confirmed against Linear's schema by introspection
+rather than guessed, including `branchName` (Linear's suggested git branch, which
+the branch-matching diff-scope rule needs) and `Comment.resolvedAt` (how an
+unresolved review comment is detected).
+
+### Acceptance criteria are parsed, not assumed
+
+`tickets/criteria.py` is a deliberate heuristic. Nobody writes tickets to a
+schema, so it recognises the shapes people actually use, in priority order:
+
+1. An explicit heading — `## Acceptance criteria`, `**Requirements:**`,
+   `### **Criteria**`. The hashes and the bold markers can both be present;
+   Linear's editor emits that combination constantly.
+2. `AC-1:` style labels anywhere in the body.
+3. A checkbox list anywhere.
+
+It tolerates common misspellings (`Accepance Criteria` appears in a real ticket
+in this workspace) and refuses to treat an ordinary bullet list as requirements —
+most tickets contain bullets that are notes, not criteria.
+
+### Readiness has three levels, not two
+
+Measured against real tickets, "no formal acceptance criteria" turned out to be
+the *normal* case, not an error. Blocking on it would make the tool useless:
+
+| Level | Means | Example |
+|---|---|---|
+| `ok` | Nothing in the way | Criteria found, PR linked, repo connected |
+| `warning` | Will run, but a reviewer should know | No AC section (intent inferred), no linked PR (falls back to branch), unresolved comments, ticket already closed |
+| `blocked` | Would produce nothing worth reading | No description at all, or no repository connected |
+
+Inferring intent from a description and raising what is ambiguous *is* the
+product. Only a ticket with nothing written down is genuinely untestable.
+
+### Session hardening
+
+A session cookie is a bearer credential — whoever holds it is the user. These
+narrow that:
+
+- **CSP.** `script-src 'self'` on the built SPA, injected at build time by
+  `frontend/vite.config.ts`. This is the one that matters: the app renders text
+  it did not write (ticket descriptions, review comments, code from diffs), and
+  CSP means injected markup cannot execute. `HttpOnly` alone would not help —
+  script on the page can call the API without ever reading the cookie.
+- **`__Host-` cookie prefix** in production. Browser-enforced: Secure, no
+  `Domain`, `Path=/`, so a compromised sibling subdomain cannot write our
+  cookies. Dev keeps the unprefixed names because the prefix requires TLS; the
+  client reads either.
+- **Absolute session lifetime** (`accounts/middleware.py`). Idle expiry slides
+  with activity, which alone means a session that keeps being used never
+  ends — including one an attacker keeps warm. The cap counts from sign-in:
+  12 h idle, 7 days absolute, both configurable.
+
+**Deployment must add** `frame-ancestors` as a real response header on whatever
+serves `index.html` — it is ignored inside a `<meta>` tag, so clickjacking
+protection cannot come from the bundle. Django already sends it for its own
+responses.
+
+Still open, worth doing once there are stored credentials to protect: a session
+inventory with "sign out everywhere", and re-authentication before revealing or
+changing the workspace's Azure DevOps PAT and Linear key.
+
+## Tests
+
+```bash
+cd backend && python manage.py test        # 133 tests
+```
+
+Frontend typecheck and production build:
+
+```bash
+cd frontend && npm run build
+```
+
+## Design tokens
+
+Colours, type and control sizes live once in
+`frontend/src/index.css` under `@theme`, lifted from the design canvas. Use the
+token utilities (`bg-ink-800`, `text-fg-dim`, `border-edge`, `text-signal`,
+`h-control`) rather than raw hex, so a palette change stays a one-file edit.
