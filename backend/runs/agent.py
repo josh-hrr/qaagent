@@ -310,6 +310,11 @@ def run_agent(initial_prompt: str, ctx: AgentContext, *, client: anthropic.Anthr
             raise AgentError("llm_auth", "The Anthropic API key was rejected. Check ANTHROPIC_API_KEY.") from exc
         except anthropic.RateLimitError as exc:
             raise AgentError("llm_rate_limited", "The model is rate limiting requests. Try again shortly.") from exc
+        except anthropic.NotFoundError as exc:
+            raise AgentError(
+                "llm_model_not_found",
+                f"Model {model!r} was not found, or this API key cannot use it. Check LLM_MODEL in backend/.env.",
+            ) from exc
         except anthropic.BadRequestError as exc:
             raise AgentError("llm_bad_request", f"The model rejected the request: {exc.message}") from exc
         except anthropic.APIStatusError as exc:

@@ -277,6 +277,19 @@ class AgentLoopTests(TestCase):
             with self.assertRaises(TypeError):
                 run_agent("prompt", ctx, client=MagicMock())
 
+    def test_unknown_model_names_the_model(self):
+        import anthropic
+
+        ctx, _, _ = context()
+        err = anthropic.NotFoundError(
+            "Not found", response=MagicMock(status_code=404, headers={}), body=None
+        )
+        with patch("runs.agent._call", side_effect=err):
+            with self.assertRaises(AgentError) as caught:
+                run_agent("prompt", ctx, client=MagicMock())
+        self.assertEqual(caught.exception.code, "llm_model_not_found")
+        self.assertIn("claude-opus-5", caught.exception.message)
+
     def test_never_submitting_is_an_error(self):
         ctx, _, _ = context()
         with patch("runs.agent._call", return_value=response([block("text", text="hmm")], stop_reason="end_turn")):
@@ -498,3 +511,21 @@ class RunApiTests(TestCase):
         ]:
             with self.subTest(url=url):
                 self.assertIn(getattr(self.client, method)(url).status_code, (401, 403))
+
+
+class GenerationSettingsCheckTests(TestCase):
+    def ids(self, **overrides):
+        from .apps import check_generation_settings
+
+        with override_settings(**overrides):
+            return [m.id for m in check_generation_settings(None)]
+
+    def test_clean_settings_pass(self):
+        self.assertEqual(self.ids(LLM_MODEL="claude-haiku-4-5", LLM_EFFORT="high"), [])
+
+    def test_inline_comment_in_model_is_caught(self):
+        # The exact line that produced a 404 in practice.
+        self.assertEqual(self.ids(LLM_MODEL="claude-haiku-4-5    # $1 / $5, cheapest", LLM_EFFORT="high"), ["runs.E001"])
+
+    def test_bad_effort_is_caught(self):
+        self.assertEqual(self.ids(LLM_MODEL="claude-opus-5", LLM_EFFORT="high  # default"), ["runs.E002"])
