@@ -30,6 +30,13 @@ env = environ.Env(
     # purpose: rotating SECRET_KEY signs everyone out and must not also make
     # every stored Linear/Azure credential unreadable.
     CREDENTIAL_ENCRYPTION_KEY=(str, ""),
+    # Generation. The model is a setting because the right cost/quality trade
+    # is the team's call; see README "Choosing a model".
+    LLM_MODEL=(str, "claude-opus-5"),
+    LLM_EFFORT=(str, "high"),
+    RUN_COST_CAP_USD=(float, 1.0),
+    RUN_MAX_FILES=(int, 40),
+    RUN_MAX_ROUNDS=(int, 12),
     # SSO — a provider counts as configured only when both id and secret are set
     MICROSOFT_CLIENT_ID=(str, ""),
     MICROSOFT_CLIENT_SECRET=(str, ""),
@@ -56,6 +63,8 @@ INSTALLED_APPS = [
     "accounts",
     "connections",
     "tickets",
+    "runs",
+    "django_tasks_db",
 ]
 
 MIDDLEWARE = [
@@ -217,6 +226,21 @@ MAGIC_LINK_MAX_PER_EMAIL_PER_HOUR = env("MAGIC_LINK_MAX_PER_EMAIL_PER_HOUR")
 MAGIC_LINK_MAX_PER_IP_PER_HOUR = env("MAGIC_LINK_MAX_PER_IP_PER_HOUR")
 
 CREDENTIAL_ENCRYPTION_KEY = env("CREDENTIAL_ENCRYPTION_KEY")
+
+# --- Generation runs -------------------------------------------------------
+# ANTHROPIC_API_KEY is read by the Anthropic SDK straight from the environment
+# (.env is loaded into it above); it is never stored in settings or the database.
+
+LLM_MODEL = env("LLM_MODEL")
+LLM_EFFORT = env("LLM_EFFORT")
+# Hard ceiling per run. When reached the agent stops reading and submits what
+# it has, and the run is marked as stopped early.
+RUN_COST_CAP_USD = env("RUN_COST_CAP_USD")
+RUN_MAX_FILES = env("RUN_MAX_FILES")
+RUN_MAX_ROUNDS = env("RUN_MAX_ROUNDS")
+
+# Runs execute in a separate worker process: `python manage.py db_worker`.
+TASKS = {"default": {"BACKEND": "django_tasks_db.DatabaseBackend"}}
 
 SSO_PROVIDERS = {
     "microsoft": {

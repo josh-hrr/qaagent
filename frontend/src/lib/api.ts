@@ -332,6 +332,58 @@ export const ticketsApi = {
   list: () => api.get<TicketsResponse>('/tickets/'),
 }
 
+/* --- runs ----------------------------------------------------------------- */
+
+export type RunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+export type StageState = 'done' | 'running' | 'queued' | 'failed' | 'cancelled' | 'skipped'
+
+export type RunSummary = {
+  id: number
+  ticketIdentifier: string
+  ticketTitle: string
+  ticketUrl: string
+  status: RunStatus
+  stage: string
+  stages: { key: string; label: string; state: StageState }[]
+  errorCode: string
+  errorMessage: string
+  model: string
+  costUsd: string
+  costCapUsd: string
+  stoppedEarly: boolean
+  stoppedEarlyReason: string
+  createdAt: string
+  startedAt: string | null
+  finishedAt: string | null
+  isTerminal: boolean
+  counts: { testCases: number; findings: number; ambiguities: number; filesRead: number }
+}
+
+export type RunDetail = RunSummary & {
+  snapshotHash: string
+  pullRequests: { url: string; repository: string; number: number; title: string; status: string }[]
+  skippedPullRequests: { url: string; reason: string }[]
+  tokens: { input: number; output: number; cacheRead: number; cacheWrite: number }
+  events: { stage: string; message: string; at: string }[]
+  filesRead: {
+    repository: string
+    path: string
+    source: 'diff' | 'agent'
+    reason: string
+    changeType: string
+    linesAdded: number
+    linesRemoved: number
+  }[]
+}
+
+export const runsApi = {
+  /** Only the ticket id is sent; the server re-reads the ticket from Linear. */
+  start: (ticketId: string, identifier: string) =>
+    api.post<{ run: RunSummary; existing: boolean }>('/runs/start/', { ticketId, identifier }),
+  get: (runId: number | string) => api.get<{ run: RunDetail }>(`/runs/${runId}/`),
+  cancel: (runId: number | string) => api.post<{ run: RunSummary }>(`/runs/${runId}/cancel/`),
+}
+
 export const authApi = {
   /** Also primes the CSRF cookie, so call it before any POST. */
   options: () => api.get<SignInOptions>('/auth/options/'),

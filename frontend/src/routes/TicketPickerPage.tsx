@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { AppShell } from '../components/AppShell'
 import { Button } from '../components/Button'
@@ -12,7 +12,7 @@ import {
   SearchIcon,
   SpinnerIcon,
 } from '../components/icons'
-import { ApiError, ticketsApi, type ReadinessStatus, type Ticket, type TicketsResponse } from '../lib/api'
+import { ApiError, runsApi, ticketsApi, type ReadinessStatus, type Ticket, type TicketsResponse } from '../lib/api'
 
 type FilterKey = 'ready' | 'linked' | 'blocked' | 'all'
 
@@ -252,7 +252,7 @@ export function TicketPickerPage() {
           </div>
 
           {/* --- detail --- */}
-          {selected && <TicketDetail ticket={selected} />}
+          {selected && <TicketDetail key={selected.id} ticket={selected} />}
         </div>
       )}
     </AppShell>
@@ -312,6 +312,24 @@ function TicketRow({
 
 function TicketDetail({ ticket }: { ticket: Ticket }) {
   const blocked = ticket.readiness.status === 'blocked'
+  const navigate = useNavigate()
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+
+  async function generate() {
+    if (blocked || starting) return
+    setStarting(true)
+    setStartError(null)
+    try {
+      // Only the id goes to the server — it re-reads the ticket itself, so the
+      // run is built from Linear's current content, not this page's copy.
+      const { run } = await runsApi.start(ticket.id, ticket.identifier)
+      navigate(`/runs/${run.id}`)
+    } catch (err) {
+      setStartError(err instanceof ApiError ? err.message : 'Could not start the run.')
+      setStarting(false)
+    }
+  }
 
   return (
     <aside className="flex w-full shrink-0 flex-col border-t border-edge bg-ink-800 xl:w-105 xl:border-t-0 xl:border-l">
@@ -445,16 +463,17 @@ function TicketDetail({ ticket }: { ticket: Ticket }) {
           size="lg"
           block
           disabled={blocked}
+          busy={starting}
           icon={<PlayIcon size={15} />}
-          // Screen 05 takes over here.
-          onClick={() => undefined}
+          onClick={() => void generate()}
         >
           {blocked ? 'Cannot generate yet' : `Generate test cases for ${ticket.identifier}`}
         </Button>
-        <p className="mt-2 text-center font-mono text-[10.5px] text-fg-faint">
-          {blocked
-            ? ticket.readiness.checks.find((c) => c.status === 'blocked')?.label
-            : 'Generation arrives with screen 05'}
+        <p className={`mt-2 text-center font-mono text-[10.5px] ${startError ? 'text-danger' : 'text-fg-faint'}`}>
+          {startError ??
+            (blocked
+              ? ticket.readiness.checks.find((c) => c.status === 'blocked')?.label
+              : 'Reads the ticket fresh from Linear when it starts')}
         </p>
       </div>
     </aside>

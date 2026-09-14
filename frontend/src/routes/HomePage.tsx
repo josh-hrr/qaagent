@@ -10,7 +10,7 @@ const ROADMAP: { n: string; name: string; done: boolean; to?: string }[] = [
   { n: '02', name: 'Connect Linear', done: true, to: '/setup/project-management' },
   { n: '03', name: 'Connect repository', done: true, to: '/setup/source-code' },
   { n: '04', name: 'Pick a ticket', done: true, to: '/tickets' },
-  { n: '05', name: 'Generation run', done: false },
+  { n: '05', name: 'Generation run', done: true, to: '/tickets' },
   { n: '06', name: 'Review workspace', done: false },
   { n: '07', name: 'Export CSV / Markdown', done: false },
 ]

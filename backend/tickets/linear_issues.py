@@ -18,10 +18,9 @@ from connections.linear import LINEAR_API_URL, LinearError, _post  # noqa: PLC27
 
 from .pull_requests import PullRequestRef, deduplicate, extract_pull_requests, from_attachment
 
-ISSUES_QUERY = """
-query QaAgentIssues($teamIds: [ID!], $first: Int!) {
-  issues(first: $first, filter: { team: { id: { in: $teamIds } } }, orderBy: updatedAt) {
-    nodes {
+# One field list shared by the list and single-issue queries, so the two can
+# never drift apart and parse differently.
+ISSUE_FIELDS = """
       id
       identifier
       title
@@ -35,9 +34,20 @@ query QaAgentIssues($teamIds: [ID!], $first: Int!) {
       children(first: 25) { nodes { id identifier title } }
       comments(first: 50) { nodes { id body resolvedAt } }
       attachments(first: 20) { nodes { id title subtitle url sourceType } }
-    }
-  }
-}
+"""
+
+ISSUES_QUERY = f"""
+query QaAgentIssues($teamIds: [ID!], $first: Int!) {{
+  issues(first: $first, filter: {{ team: {{ id: {{ in: $teamIds }} }} }}, orderBy: updatedAt) {{
+    nodes {{{ISSUE_FIELDS}}}
+  }}
+}}
+"""
+
+ISSUE_QUERY = f"""
+query QaAgentIssue($id: String!) {{
+  issue(id: $id) {{{ISSUE_FIELDS}}}
+}}
 """
 
 
@@ -118,6 +128,20 @@ def _parse_issue(node: dict) -> LinearIssue:
         ],
         pull_requests=pull_requests,
     )
+
+
+def fetch_issue(api_key: str, issue_id: str) -> LinearIssue:
+    """One issue, read fresh. Used when a run starts.
+
+    A run never trusts ticket content sent by the browser: the client could be
+    stale by minutes, or deliberately tampered with. The server reads the
+    ticket itself, and that read is what the run's snapshot records.
+    """
+    data = _post(api_key, ISSUE_QUERY, {"id": issue_id})
+    node = data.get("issue")
+    if not node:
+        raise LinearError("issue_not_found", "That ticket no longer exists or is not visible to this key.")
+    return _parse_issue(node)
 
 
 def fetch_issues(api_key: str, team_ids: list[str], limit: int = 100) -> list[LinearIssue]:

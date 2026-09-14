@@ -13,7 +13,7 @@ docs/       Notes, starting with the original brief
 
 ## Running it
 
-Two terminals. The Vite dev server proxies `/api` to Django, so both apps share
+Three terminals: backend, frontend, and the worker. The Vite dev server proxies `/api` to Django, so both apps share
 an origin and the session cookie behaves exactly as it will in production.
 
 **Backend** — http://127.0.0.1:8000
@@ -37,6 +37,17 @@ npm run dev
 ```
 
 Open http://localhost:5173 and you land on the sign-in screen.
+
+**Worker** — needed for test case generation (screen 05)
+
+```bash
+cd backend
+.venv/Scripts/activate
+python manage.py db_worker
+```
+
+Generation runs in this separate process, never inside a web request. Without
+it, a run sits at *queued*. It also needs `ANTHROPIC_API_KEY` in `backend/.env`.
 
 ## Signing in during development
 
@@ -66,7 +77,7 @@ a trailing `=` is a soft line break — so join the pieces before opening it. Po
 | 02 | Connect Linear | **built** — `/setup/project-management` |
 | 03 | Connect repository | **built** — `/setup/source-code` |
 | 04 | Pick a ticket | **built** — `/tickets` |
-| 05 | Generation run | designed |
+| 05 | Generation run | **built** — `/runs/:id` |
 | 06 | Review workspace | designed |
 | 07 | Export CSV / Markdown | designed |
 
@@ -169,9 +180,10 @@ linked PR first, then a branch carrying the ticket ID, then ask. Stored per
 connection, because a GitHub org and an Azure org may genuinely differ in
 whether their teams open pull requests before asking for tests.
 
-**Nothing is cloned at connect time.** The run pipeline clones into a throwaway
-container. `last_indexed_commit` stays empty until then, so the UI says "not
-cloned yet" rather than claiming an index that does not exist.
+**Nothing is cloned — at connect time or ever.** Runs read code through the
+Azure DevOps API, file by file (see screen 05). `last_indexed_commit` stays
+empty, so the UI says "not cloned yet" rather than claiming an index that does
+not exist.
 
 **How much code a run reads** is decided by the agent, not by a fixed rule — see
 [`docs/decisions/0001-scope-expansion.md`](docs/decisions/0001-scope-expansion.md).
@@ -243,6 +255,61 @@ the *normal* case, not an error. Blocking on it would make the tool useless:
 Inferring intent from a description and raising what is ambiguous *is* the
 product. Only a ticket with nothing written down is genuinely untestable.
 
+## Generating test cases (screen 05)
+
+Press **Generate** on a ticket. A run is queued, the worker picks it up, and
+`/runs/:id` shows it progress through five stages: fetch ticket, resolve diff
+scope, read the changed files, draft test cases, cross-check.
+
+- **The ticket is re-read on the server** when the run starts. Only its id
+  comes from the browser — client-sent content could be stale or tampered with.
+- **A snapshot and content hash** of what the run used (description, criteria,
+  PR links) is stored, for the drift check planned in screen 06.
+- **Code comes from the Azure DevOps API**, not a clone: each PR's changed files
+  at its head commit, diffed against the merge base. Abandoned PRs are skipped;
+  merged ones are kept.
+- **The agent follows the change** with read-only `read_file` and
+  `list_directory` tools, each call carrying a reason that is recorded and shown.
+  See [decision 0001](docs/decisions/0001-scope-expansion.md).
+- **Bounded**: 40 files, 12 model rounds, $1.00 per run by default. Hitting a
+  bound marks the run *stopped early* rather than implying full coverage.
+- **Cancel** is a flag the worker checks at stage and round boundaries, so a
+  run stops cleanly rather than mid-write.
+- A ticket needs a **linked pull request** today. Branch matching is not built
+  yet — see [docs/backlog.md](docs/backlog.md).
+
+### Choosing a model
+
+`LLM_MODEL` in `backend/.env`. It defaults to `claude-opus-5`; the cheaper
+options are one line away:
+
+| Model | Input / output per 1M tokens | Notes |
+|---|---|---|
+| `claude-opus-5` | $5 / $25 | Default. Strongest at following a change across files |
+| `claude-sonnet-5` | $2 / $10 | Middle ground |
+| `claude-haiku-4-5` | $1 / $5 | Cheapest. No adaptive thinking or effort control |
+
+`LLM_EFFORT` (`low`…`max`) trades depth for cost on the first two. On Opus,
+server-side **refusal fallbacks** are enabled: if a safety classifier declines
+a request, it is retried on a fallback model inside the same call instead of
+failing the run. The conversation prefix is **prompt-cached**, so each round
+re-reads the diff at a tenth of the input price.
+
+### Generation security
+
+- **Prompt injection is expected, not hoped away.** Ticket text, comments and
+  code are written by other people and can contain instructions aimed at the
+  model. The system prompt says so, and the tools make it survivable: they can
+  only *read*, only inside the PR's repository, only at the PR's commit. Paths
+  are validated (no `..`, no URLs), so the worst an injection can do is waste
+  budget or write bad test cases — which a human reviews in screen 06.
+- **Secrets are masked before code leaves.** `runs/redaction.py` masks known
+  token formats (AWS, GitHub, Anthropic, Linear, Slack, JWTs, private keys,
+  credentials in connection strings) and secret-named assignments. A heuristic
+  net, not a guarantee.
+- **`ANTHROPIC_API_KEY` lives only in the environment** — never in settings,
+  the database, or a response.
+
 ### Session hardening
 
 A session cookie is a bearer credential — whoever holds it is the user. These
@@ -274,7 +341,7 @@ changing the workspace's Azure DevOps PAT and Linear key.
 ## Tests
 
 ```bash
-cd backend && python manage.py test        # 133 tests
+cd backend && python manage.py test        # 192 tests
 ```
 
 Frontend typecheck and production build:
