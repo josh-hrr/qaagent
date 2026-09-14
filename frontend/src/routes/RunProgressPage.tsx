@@ -19,7 +19,7 @@ const POLL_INTERVAL_MS = 2000;
 const REMEDIATION: Record<string, { hint: string; to?: string; cta?: string }> =
   {
     no_pull_request: {
-      hint: "Paste the pull request link into a comment on the ticket in Linear, then run again.",
+      hint: "Paste the pull request link into a comment on the ticket in Linear, or put the ticket ID in the branch name, then run again.",
       to: "/tickets",
       cta: "Back to tickets",
     },
@@ -523,14 +523,14 @@ export function RunProgressPage() {
             </ol>
 
             {run.status === "succeeded" && (
-              <div className="rounded-[10px] border border-signal-edge bg-[#121710] px-5 py-4">
-                <p className="mb-3 text-[13px] text-fg-muted">
+              <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-signal-edge bg-[#121710] px-5 py-4">
+                <p className="flex-1 text-[13px] text-fg-muted">
                   {run.counts.testCases} test cases · {run.counts.findings} code
                   findings · {run.counts.ambiguities} open questions
                 </p>
-                <p className="text-[12px] text-fg-faint">
-                  Reviewing and exporting them arrives with screen 06.
-                </p>
+                <Link to={`/runs/${run.id}/review`} className="no-underline">
+                  <Button variant="primary">Review test cases</Button>
+                </Link>
               </div>
             )}
           </div>

@@ -59,6 +59,8 @@ class Run(models.Model):
     # Pull requests actually used, and those skipped with the reason why.
     pull_requests = models.JSONField(default=list, blank=True)
     skipped_pull_requests = models.JSONField(default=list, blank=True)
+    # Branches used when no pull request was linked (branch matching).
+    branches = models.JSONField(default=list, blank=True)
 
     # --- model usage and cost -------------------------------------------
     model = models.CharField(max_length=60, blank=True)
@@ -159,6 +161,16 @@ class TestCase(models.Model):
     status = models.CharField(max_length=12, choices=TestCaseStatus.choices, default=TestCaseStatus.DRAFT)
     # Acceptance-criterion keys and "path:line" references this case came from.
     traces_to = models.JSONField(default=list, blank=True)
+    suite = models.CharField(max_length=120, blank=True)
+    estimate_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # Where the case came from, and whether a person has changed it since.
+    origin = models.CharField(max_length=12, default="generated")  # generated | finding | manual
+    edited = models.BooleanField(default=False)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ("number",)
@@ -183,6 +195,9 @@ class Finding(models.Model):
     title = models.CharField(max_length=300)
     explanation = models.TextField()
     location = models.CharField(max_length=500, blank=True)
+    dismissed = models.BooleanField(default=False)
+    # Set when a reviewer turns this finding into a test case.
+    test_case_number = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ("id",)
@@ -197,6 +212,14 @@ class Ambiguity(models.Model):
     explanation = models.TextField(blank=True)
     source = models.CharField(max_length=300, blank=True)
     blocks_test_cases = models.JSONField(default=list, blank=True)
+
+    # A reviewer's answer. Fed into the next run for the same ticket as a
+    # clarification, so re-running actually uses what was decided.
+    answer = models.TextField(blank=True)
+    answered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    answered_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ("id",)

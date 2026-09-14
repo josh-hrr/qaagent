@@ -393,6 +393,156 @@ export const runsApi = {
   cancel: (runId: number | string) => api.post<{ run: RunSummary }>(`/runs/${runId}/cancel/`),
 }
 
+/* --- review (screen 06) --------------------------------------------------- */
+
+export type Priority = 'P1' | 'P2' | 'P3'
+export type TestCaseStatus = 'draft' | 'ready' | 'needs_info' | 'approved' | 'rejected'
+
+export type Trace = {
+  label: string
+  kind: 'criterion' | 'code'
+  /** The criterion's text, for criteria. */
+  text: string
+  /** Azure DevOps link pinned to the run's commit, for code. Empty when unknown. */
+  url: string
+}
+
+export type ReviewTestCase = {
+  number: number
+  identifier: string
+  title: string
+  description: string
+  preconditions: string
+  steps: string[]
+  expectedResult: string
+  actualResult: string
+  priority: Priority
+  testType: string
+  status: TestCaseStatus
+  suite: string
+  estimateMinutes: number | null
+  origin: 'generated' | 'finding' | 'manual' | string
+  edited: boolean
+  reviewedBy: string | null
+  tracesTo: Trace[]
+}
+
+export type ReviewFinding = {
+  id: number
+  severity: 'high' | 'medium' | 'low'
+  title: string
+  explanation: string
+  location: string
+  locationUrl: string
+  dismissed: boolean
+  testCaseNumber: number | null
+}
+
+export type ReviewAmbiguity = {
+  id: number
+  kind: string
+  question: string
+  explanation: string
+  source: string
+  blocksTestCases: number[]
+  answer: string
+  answeredBy: string | null
+  answeredAt: string | null
+}
+
+export type ReviewRun = {
+  id: number
+  runNumber: number
+  status: RunStatus
+  ticketIdentifier: string
+  ticketTitle: string
+  ticketUrl: string
+  ticketLinearId: string
+  teamName: string
+  createdAt: string
+  finishedAt: string | null
+  costUsd: string
+  model: string
+  stoppedEarly: boolean
+  stoppedEarlyReason: string
+  scope: {
+    kind: 'pull_request' | 'branch'
+    repository: string
+    sourceRef: string
+    targetRef: string
+    headCommit: string
+    baseCommit: string
+    number: number | null
+    url: string
+  } | null
+  diff: { files: number; linesAdded: number; linesRemoved: number }
+  criteria: { key: string; text: string }[]
+  criteriaTotal: number
+  criteriaCovered: number | null
+}
+
+export type ReviewResponse = {
+  run: ReviewRun
+  testCases: ReviewTestCase[]
+  findings: ReviewFinding[]
+  ambiguities: ReviewAmbiguity[]
+}
+
+export type TicketDrift =
+  | { error: string }
+  | {
+      changed: boolean
+      updatedAt: string
+      titleChanged: boolean
+      descriptionChanged: boolean
+      criteriaAdded: string[]
+      criteriaRemoved: string[]
+      criteriaEdited: string[]
+      pullRequestsAdded: string[]
+      pullRequestsRemoved: string[]
+    }
+
+export type CodeDrift =
+  | { label?: string; error: string }
+  | { label: string; headCommit: string; commitsAhead: number; status: string }
+
+export type DriftResponse = { ticket: TicketDrift | null; code: CodeDrift[]; checkedAt: string }
+
+export type TestCaseUpdate = Partial<{
+  title: string
+  description: string
+  preconditions: string
+  steps: string[]
+  expectedResult: string
+  actualResult: string
+  priority: Priority
+  status: TestCaseStatus
+  testType: string
+  suite: string
+  estimateMinutes: number | null
+}>
+
+export type BulkAction =
+  | { action: 'set_priority'; value: Priority }
+  | { action: 'set_status'; value: TestCaseStatus }
+  | { action: 'delete' }
+
+export const reviewApi = {
+  get: (runId: number | string) => api.get<ReviewResponse>(`/runs/${runId}/review/`),
+  /** Asks Linear and Azure DevOps what changed since the run. Call on open and on request only. */
+  drift: (runId: number | string) => api.get<DriftResponse>(`/runs/${runId}/drift/`),
+  updateTestCase: (runId: number, number: number, changes: TestCaseUpdate) =>
+    api.patch<{ testCase: ReviewTestCase }>(`/runs/${runId}/test-cases/${number}/`, changes),
+  bulk: (runId: number, numbers: number[], action: BulkAction) =>
+    api.post<ReviewResponse & { updated: number }>(`/runs/${runId}/test-cases/bulk/`, { numbers, ...action }),
+  findingToTestCase: (runId: number, findingId: number) =>
+    api.post<ReviewResponse & { testCase: ReviewTestCase }>(`/runs/${runId}/findings/${findingId}/test-case/`),
+  dismissFinding: (runId: number, findingId: number, dismissed: boolean) =>
+    api.post<{ finding: ReviewFinding }>(`/runs/${runId}/findings/${findingId}/dismiss/`, { dismissed }),
+  answer: (runId: number, ambiguityId: number, answer: string) =>
+    api.post<{ ambiguity: ReviewAmbiguity }>(`/runs/${runId}/ambiguities/${ambiguityId}/answer/`, { answer }),
+}
+
 export const authApi = {
   /** Also primes the CSRF cookie, so call it before any POST. */
   options: () => api.get<SignInOptions>('/auth/options/'),

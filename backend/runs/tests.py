@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -13,8 +14,9 @@ from tickets.pull_requests import PullRequestRef
 
 from . import pipeline
 from .agent import AgentContext, AgentError, RunCancelled, run_agent
-from .azure_code import ChangedFile, PullRequestChanges, PullRequestInfo, normalize_repo_path
-from .models import FileRead, Run, RunStatus, Stage
+from .azure_code import BranchInfo, ChangedFile, PullRequestChanges, PullRequestInfo, normalize_repo_path
+from .models import Ambiguity, FileRead, Finding, Run, RunStatus, Stage
+from .review import code_url
 from .models import TestCase as GeneratedCase
 from .redaction import REDACTED, redact
 from .scope import snapshot_hash, unified_diff
@@ -404,9 +406,71 @@ class PipelineTests(TestCase):
         self.assertIn("not connected", run.skipped_pull_requests[0]["reason"])
 
     def test_no_pr_at_all_says_so_plainly(self):
-        run = self.execute(issue=issue_with_pr(pull_requests=[]))
+        reader = self.reader()
+        reader.branches.return_value = [("main", "m" * 40)]
+        run = self.execute(issue=issue_with_pr(pull_requests=[]), reader=reader)
         self.assertEqual(run.status, RunStatus.FAILED)
         self.assertEqual(run.error_code, "no_pull_request")
+
+    def branch_reader(self, names, ahead=2):
+        reader = self.reader()
+        reader.branches.return_value = [(n, "h" * 40) for n in names]
+        reader.branch_changes.side_effect = lambda name, default: PullRequestChanges(
+            info=BranchInfo(name=name, target_ref=default, head_commit="h" * 40, base_commit="b" * 40, ahead_count=ahead),
+            files=[ChangedFile(path="/api/auth.py", change_type="edit", base_content="a\n", head_content="b\n")] if ahead else [],
+        )
+        return reader
+
+    def test_a_branch_named_after_the_ticket_is_used_when_no_pr_is_linked(self):
+        reader = self.branch_reader(["main", "josue/tes-8-refresh", "TES-80"])
+        run = self.execute(issue=issue_with_pr(pull_requests=[], branch_name=""), reader=reader)
+        self.assertEqual(run.status, RunStatus.SUCCEEDED, run.error_message)
+        self.assertEqual(run.branches[0]["name"], "josue/tes-8-refresh")
+        self.assertEqual(run.pull_requests, [])
+        reader.branch_changes.assert_called_once_with("josue/tes-8-refresh", "main")
+
+    def test_several_matching_branches_are_not_guessed(self):
+        reader = self.branch_reader(["tes-8-a", "tes-8-b"])
+        run = self.execute(issue=issue_with_pr(pull_requests=[], branch_name=""), reader=reader)
+        self.assertEqual(run.error_code, "no_pull_request")
+        self.assertIn("several branches", run.skipped_pull_requests[0]["reason"])
+
+    def test_linears_suggested_branch_name_breaks_a_tie(self):
+        reader = self.branch_reader(["tes-8-a", "tes-8"])
+        run = self.execute(issue=issue_with_pr(pull_requests=[], branch_name="tes-8"), reader=reader)
+        self.assertEqual(run.branches[0]["name"], "tes-8")
+
+    def test_a_merged_branch_is_skipped_with_a_hint(self):
+        reader = self.branch_reader(["TES-8"], ahead=0)
+        run = self.execute(issue=issue_with_pr(pull_requests=[]), reader=reader)
+        self.assertEqual(run.error_code, "no_pull_request")
+        self.assertIn("probably merged", run.skipped_pull_requests[0]["reason"])
+
+    def test_branch_rule_tries_branches_before_prs(self):
+        Connection.objects.filter(provider=Provider.AZURE_DEVOPS).update(diff_scope_strategy="branch_name")
+        reader = self.branch_reader(["tes-8"])
+        run = self.execute(reader=reader)
+        self.assertEqual(run.branches[0]["name"], "tes-8")
+        reader.pull_request.assert_not_called()
+
+    def test_answered_questions_from_earlier_runs_reach_the_prompt(self):
+        earlier = Run.objects.create(ticket_linear_id="lin_1", ticket_identifier="TES-8", status=RunStatus.SUCCEEDED)
+        Run.objects.filter(pk=earlier.pk).update(created_at=self.run_obj.created_at - timedelta(hours=1))
+        Ambiguity.objects.create(run=earlier, kind="unspecified", question="What happens offline?",
+                                 answer="Show a retry banner.", answered_at=self.run_obj.created_at)
+        prompts = []
+        with patch("runs.pipeline.fetch_issue", return_value=issue_with_pr()), \
+             patch("runs.pipeline.CodeReader", return_value=self.reader()), \
+             patch("runs.pipeline.run_agent", side_effect=lambda prompt, ctx: prompts.append(prompt) or (_ for _ in ()).throw(AgentError("x", "stop"))):
+            pipeline.execute(self.run_obj.pk)
+        self.assertIn("<clarifications>", prompts[0])
+        self.assertIn("Show a retry banner.", prompts[0])
+
+    def test_suite_and_estimate_are_saved(self):
+        results = {**RESULTS, "test_cases": [{**RESULTS["test_cases"][0], "suite": "Auth / Tokens", "estimate_minutes": 5}]}
+        run = self.execute(agent_response=response([submit(results)]))
+        case = run.test_cases.get()
+        self.assertEqual((case.suite, case.estimate_minutes), ("Auth / Tokens", 5))
 
     def test_coverage_check_reports_uncovered_criteria(self):
         run = self.execute()
@@ -565,3 +629,152 @@ class RunCountsApiTests(TestCase):
         Run.objects.create(ticket_linear_id="b", status=RunStatus.QUEUED)
         Run.objects.create(ticket_linear_id="c", status=RunStatus.SUCCEEDED)
         self.assertEqual(self.client.get(reverse("runs:list")).json()["activeCount"], 2)
+
+
+# --- review (screen 06) ------------------------------------------------------
+
+
+class BranchPatternTests(TestCase):
+    def test_matches_the_id_as_a_whole_token(self):
+        pattern = pipeline.branch_pattern("TES-8")
+        for name in ["TES-8", "tes-8", "josue/tes-8-login", "feature/TES-8_fix"]:
+            self.assertTrue(pattern.search(name), name)
+        for name in ["TES-80", "XTES-8", "main", "tes-18"]:
+            self.assertFalse(pattern.search(name), name)
+
+
+class CodeUrlTests(TestCase):
+    def test_links_pin_the_commit_and_line(self):
+        url = code_url("https://dev.azure.com/acme/Core/_git/core-api", "abc", "src/auth.py:40-42")
+        self.assertIn("path=/src/auth.py", url)
+        self.assertIn("version=GCabc", url)
+        self.assertIn("line=40", url)
+        self.assertIn("lineEnd=42", url)
+
+    def test_nothing_to_link_without_a_repo_url(self):
+        self.assertEqual(code_url("", "abc", "src/auth.py:4"), "")
+
+
+@override_settings(CREDENTIAL_ENCRYPTION_KEY=TEST_ENCRYPTION_KEY)
+class ReviewApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("dev@example.com")
+        self.client.force_login(self.user)
+        self.run = Run.objects.create(
+            ticket_linear_id="lin_1", ticket_identifier="TES-8", status=RunStatus.SUCCEEDED,
+            snapshot={"title": "t", "description": "d", "criteria": [{"key": "AC-1", "text": "Replay rejected"}],
+                      "pull_request_urls": [], "team_name": "Core"},
+            pull_requests=[{"repository": "core-api", "number": 7, "title": "x", "status": "active",
+                            "head_commit": "h" * 40, "base_commit": "b" * 40, "source_ref": "TES-8", "target_ref": "main"}],
+        )
+        self.run.snapshot_hash = snapshot_hash(self.run.snapshot)
+        self.run.save()
+        for n in (1, 2, 3):
+            GeneratedCase.objects.create(run=self.run, number=n, title=f"Case {n}", traces_to=["AC-1", "/a.py:3"])
+        self.finding = Finding.objects.create(run=self.run, severity="high", title="Bug", explanation="Why", location="/a.py:9")
+        self.question = Ambiguity.objects.create(run=self.run, kind="unspecified", question="Offline?")
+
+    def url(self, name, *args):
+        return reverse(f"runs:{name}", args=[self.run.pk, *args])
+
+    def test_review_returns_everything_with_links(self):
+        body = self.client.get(self.url("review")).json()
+        self.assertEqual(len(body["testCases"]), 3)
+        self.assertEqual(body["run"]["teamName"], "Core")
+        self.assertEqual(body["run"]["scope"]["sourceRef"], "TES-8")
+        traces = body["testCases"][0]["tracesTo"]
+        self.assertEqual(traces[0], {"label": "AC-1", "kind": "criterion", "text": "Replay rejected", "url": ""})
+        self.assertEqual(traces[1]["kind"], "code")
+
+    def test_editing_content_marks_the_case_edited(self):
+        response = self.client.patch(self.url("test-case", 1), {"title": "Better", "steps": ["a", "b"]}, "application/json")
+        self.assertEqual(response.status_code, 200)
+        case = GeneratedCase.objects.get(run=self.run, number=1)
+        self.assertEqual((case.title, case.steps, case.edited), ("Better", ["a", "b"], True))
+
+    def test_triage_does_not_mark_edited_but_records_the_reviewer(self):
+        self.client.patch(self.url("test-case", 2), {"status": "approved", "priority": "P1"}, "application/json")
+        case = GeneratedCase.objects.get(run=self.run, number=2)
+        self.assertEqual((case.status, case.priority, case.edited, case.reviewed_by), ("approved", "P1", False, self.user))
+
+    def test_invalid_status_is_rejected(self):
+        response = self.client.patch(self.url("test-case", 1), {"status": "shipped"}, "application/json")
+        self.assertEqual(response.status_code, 400)
+
+    def test_bulk_actions(self):
+        self.client.post(self.url("bulk-test-cases"), {"numbers": [1, 2], "action": "set_priority", "value": "P3"}, "application/json")
+        self.assertEqual(GeneratedCase.objects.filter(run=self.run, priority="P3").count(), 2)
+        self.client.post(self.url("bulk-test-cases"), {"numbers": [3], "action": "delete"}, "application/json")
+        self.assertFalse(GeneratedCase.objects.filter(run=self.run, number=3).exists())
+        bad = self.client.post(self.url("bulk-test-cases"), {"numbers": [1], "action": "set_status", "value": "nope"}, "application/json")
+        self.assertEqual(bad.status_code, 400)
+
+    def test_bulk_cannot_touch_another_runs_cases(self):
+        other = Run.objects.create(ticket_linear_id="x", status=RunStatus.SUCCEEDED)
+        GeneratedCase.objects.create(run=other, number=1, title="Other")
+        self.client.post(self.url("bulk-test-cases"), {"numbers": [1], "action": "delete"}, "application/json")
+        self.assertTrue(GeneratedCase.objects.filter(run=other, number=1).exists())
+
+    def test_finding_becomes_a_test_case_once(self):
+        response = self.client.post(self.url("finding-to-test-case", self.finding.pk))
+        self.assertEqual(response.status_code, 201)
+        case = response.json()["testCase"]
+        self.assertEqual((case["number"], case["priority"], case["origin"]), (4, "P1", "finding"))
+        again = self.client.post(self.url("finding-to-test-case", self.finding.pk))
+        self.assertEqual(again.status_code, 409)
+
+    def test_dismiss_and_restore_a_finding(self):
+        self.client.post(self.url("dismiss-finding", self.finding.pk), {"dismissed": True}, "application/json")
+        self.finding.refresh_from_db()
+        self.assertTrue(self.finding.dismissed)
+        self.client.post(self.url("dismiss-finding", self.finding.pk), {"dismissed": False}, "application/json")
+        self.finding.refresh_from_db()
+        self.assertFalse(self.finding.dismissed)
+
+    def test_answering_records_who_and_clearing_resets(self):
+        self.client.post(self.url("answer-ambiguity", self.question.pk), {"answer": "Retry banner"}, "application/json")
+        self.question.refresh_from_db()
+        self.assertEqual((self.question.answer, self.question.answered_by), ("Retry banner", self.user))
+        self.client.post(self.url("answer-ambiguity", self.question.pk), {"answer": ""}, "application/json")
+        self.question.refresh_from_db()
+        self.assertIsNone(self.question.answered_at)
+
+    def test_unfinished_runs_cannot_be_edited(self):
+        Run.objects.filter(pk=self.run.pk).update(status=RunStatus.RUNNING)
+        response = self.client.patch(self.url("test-case", 1), {"title": "x"}, "application/json")
+        self.assertEqual(response.status_code, 409)
+
+    def connect(self):
+        linear = Connection.objects.create(provider=Provider.LINEAR)
+        linear.set_credential("lin_api_x"); linear.save()
+        azure = Connection.objects.create(provider=Provider.AZURE_DEVOPS, organization_name="acme")
+        azure.set_credential("pat"); azure.save()
+        Repository.objects.create(connection=azure, external_id="r", name="core-api", project_name="Core", selected=True)
+
+    def test_drift_reports_ticket_and_commit_changes(self):
+        self.connect()
+        live = issue_with_pr(title="t", description="d\n## Acceptance criteria\n- AC-1: Replay rejected\n- AC-2: New one\n")
+        reader = MagicMock()
+        reader.pull_request.return_value = PullRequestInfo(**{**INFO.__dict__, "head_commit": "n" * 40})
+        reader.commits_ahead.return_value = 3
+        with patch("runs.review.fetch_issue", return_value=live), patch("runs.review.CodeReader", return_value=reader) as cls:
+            body = self.client.get(self.url("drift")).json()
+        self.assertTrue(body["ticket"]["changed"])
+        self.assertIn("AC-2", body["ticket"]["criteriaAdded"])
+        self.assertEqual(body["code"][0]["commitsAhead"], 3)
+        cls.assert_called_once_with("acme", "Core", "core-api", "pat")
+
+    def test_drift_reports_errors_per_part(self):
+        self.connect()
+        reader = MagicMock()
+        reader.pull_request.side_effect = AzureError("not_found", "Pull request not found.")
+        with patch("runs.review.fetch_issue", side_effect=pipeline.LinearError("unauthorized", "Linear rejected the key.")), \
+             patch("runs.review.CodeReader", return_value=reader):
+            body = self.client.get(self.url("drift")).json()
+        self.assertEqual(body["ticket"], {"error": "Linear rejected the key."})
+        self.assertEqual(body["code"][0]["error"], "Pull request not found.")
+
+    def test_review_endpoints_require_a_session(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(self.url("review")).status_code, 403)
+        self.assertEqual(self.client.get(self.url("drift")).status_code, 403)

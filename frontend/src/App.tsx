@@ -8,6 +8,7 @@ import { ConnectProjectManagementPage } from './routes/ConnectProjectManagementP
 import { ConnectRepositoryPage } from './routes/ConnectRepositoryPage'
 import { HomePage } from './routes/HomePage'
 import { MagicLinkPage } from './routes/MagicLinkPage'
+import { ReviewWorkspacePage } from './routes/ReviewWorkspacePage'
 import { RunProgressPage } from './routes/RunProgressPage'
 import { SignInPage } from './routes/SignInPage'
 import { TicketPickerPage } from './routes/TicketPickerPage'
@@ -78,6 +79,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <RunProgressPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/runs/:runId/review"
+            element={
+              <RequireAuth>
+                <ReviewWorkspacePage />
               </RequireAuth>
             }
           />

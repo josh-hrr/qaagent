@@ -78,7 +78,7 @@ a trailing `=` is a soft line break — so join the pieces before opening it. Po
 | 03 | Connect repository | **built** — `/setup/source-code` |
 | 04 | Pick a ticket | **built** — `/tickets` |
 | 05 | Generation run | **built** — `/runs/:id` |
-| 06 | Review workspace | designed |
+| 06 | Review workspace | **built** — `/runs/:id/review` |
 | 07 | Export CSV / Markdown | designed |
 
 Screens 02–07 and the empty/error states live in the design canvas
@@ -264,7 +264,7 @@ scope, read the changed files, draft test cases, cross-check.
 - **The ticket is re-read on the server** when the run starts. Only its id
   comes from the browser — client-sent content could be stale or tampered with.
 - **A snapshot and content hash** of what the run used (description, criteria,
-  PR links) is stored, for the drift check planned in screen 06.
+  PR links) is stored, for the drift check in screen 06.
 - **Code comes from the Azure DevOps API**, not a clone: each PR's changed files
   at its head commit, diffed against the merge base. Abandoned PRs are skipped;
   merged ones are kept.
@@ -275,8 +275,28 @@ scope, read the changed files, draft test cases, cross-check.
   bound marks the run *stopped early* rather than implying full coverage.
 - **Cancel** is a flag the worker checks at stage and round boundaries, so a
   run stops cleanly rather than mid-write.
-- A ticket needs a **linked pull request** today. Branch matching is not built
-  yet — see [docs/backlog.md](docs/backlog.md).
+- **Which code**: linked pull requests first, then a **branch named after the
+  ticket** (`TES-8`, `josue/tes-8-login`; not `TES-80`) diffed against the
+  repository's default branch. The repository's diff-scope rule sets the order.
+  Several matching branches are not guessed between (Linear's suggested branch
+  name breaks a tie); a branch with nothing beyond main is skipped as probably
+  merged.
+
+## Reviewing (screen 06)
+
+`/runs/:id/review`, opened from a finished run.
+
+- **Test cases**: filter, select, edit inline, approve / reject, bulk priority,
+  status and delete. Rewriting content marks a case *edited*; triage does not.
+- **Code findings**: a location linked to Azure DevOps at the run's commit (no
+  code is stored). Add one as a test case, copy a comment for the ticket, or
+  dismiss it.
+- **Ambiguities**: copy as a Linear comment, or answer here. Answers are fed to
+  the next run of the same ticket as clarifications.
+- **Nothing is written to Linear.** Comments go to the clipboard.
+- **Drift** is checked when the page opens and on request, never on a timer:
+  the live ticket's content hash against the run's snapshot (with what changed),
+  and commits pushed to the PR or branch since the run read it.
 
 ### Choosing a model
 

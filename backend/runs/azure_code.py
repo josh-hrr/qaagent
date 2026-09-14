@@ -43,6 +43,17 @@ class PullRequestInfo:
     iteration_id: int
 
 
+@dataclass(frozen=True)
+class BranchInfo:
+    """A branch diffed against the repository's default branch."""
+
+    name: str  # short name, e.g. "TES-8"
+    target_ref: str  # the default branch it is compared against
+    head_commit: str
+    base_commit: str  # merge base with the default branch
+    ahead_count: int
+
+
 @dataclass
 class ChangedFile:
     path: str
@@ -54,7 +65,9 @@ class ChangedFile:
 
 @dataclass
 class PullRequestChanges:
-    info: PullRequestInfo
+    # A PullRequestInfo or a BranchInfo — both carry head_commit and base_commit,
+    # which is all the reading stages need.
+    info: PullRequestInfo | BranchInfo
     files: list[ChangedFile] = field(default_factory=list)
 
 
@@ -122,27 +135,76 @@ class CodeReader:
             f"?api-version={API_VERSION}&$top=2000",
             self._pat,
         ).get("changeEntries") or []
+        return PullRequestChanges(info=info, files=self._files(entries, info.head_commit, info.base_commit))
 
-        result = PullRequestChanges(info=info)
+    # -- branches -------------------------------------------------------
+
+    def branches(self) -> list[tuple[str, str]]:
+        """Every branch as ``(short_name, head_commit)``."""
+        data = _get(f"{self._base}/refs?filter=heads/&api-version={API_VERSION}", self._pat)
+        return [
+            (ref["name"].removeprefix("refs/heads/"), ref.get("objectId") or "")
+            for ref in data.get("value") or []
+            if ref.get("name")
+        ]
+
+    def branch_changes(self, branch: str, default_branch: str) -> PullRequestChanges:
+        """What a branch changes relative to where it left the default branch.
+
+        Diffing against the merge base, not the default branch's tip, shows only
+        the branch's own work — not everything merged to main since it forked.
+        """
+        data = self._diff(default_branch, "branch", branch, "branch")
+        common = (data.get("commonCommit") or "").strip()
+        head = (data.get("targetCommit") or "").strip()
+        if not common or not head:
+            raise AzureError("bad_response", f"Could not compare {branch} with {default_branch}.")
+        info = BranchInfo(
+            name=branch,
+            target_ref=default_branch,
+            head_commit=head,
+            base_commit=common,
+            ahead_count=int(data.get("aheadCount") or 0),
+        )
+        return PullRequestChanges(info=info, files=self._files(data.get("changes") or [], head, common))
+
+    def commits_ahead(self, old_commit: str, new_commit: str) -> int:
+        """How many commits ``new_commit`` has that ``old_commit`` does not."""
+        if not old_commit or not new_commit or old_commit == new_commit:
+            return 0
+        return int(self._diff(old_commit, "commit", new_commit, "commit").get("aheadCount") or 0)
+
+    def _diff(self, base: str, base_type: str, target: str, target_type: str) -> dict:
+        return _get(
+            f"{self._base}/diffs/commits?baseVersion={quote(base)}&baseVersionType={base_type}"
+            f"&targetVersion={quote(target)}&targetVersionType={target_type}"
+            f"&diffCommonCommit=true&$top=2000&api-version={API_VERSION}",
+            self._pat,
+        )
+
+    def _files(self, entries: list[dict], head_commit: str, base_commit: str) -> list[ChangedFile]:
+        files = []
         for entry in entries:
             item = entry.get("item") or {}
             path = item.get("path") or ""
             change_type = (entry.get("changeType") or "").lower()
-            if not path:
+            # The diffs endpoint says outright when an entry is a folder; PR
+            # iteration changes do not, so those are caught on fetch below.
+            if not path or item.get("gitObjectType") == "tree" or item.get("isFolder"):
                 continue
             changed = ChangedFile(path=path, change_type=change_type)
 
             if "delete" not in change_type:
-                changed.head_content, head_kind = self._content(path, info.head_commit)
+                changed.head_content, head_kind = self._content(path, head_commit)
                 if head_kind == "tree":
-                    continue  # a folder, not a file
+                    continue
                 if head_kind in ("binary", "too_large"):
                     changed.skipped_reason = head_kind
             if "add" not in change_type and not changed.skipped_reason:
-                changed.base_content, _ = self._content(entry.get("originalPath") or path, info.base_commit)
+                changed.base_content, _ = self._content(entry.get("originalPath") or path, base_commit)
 
-            result.files.append(changed)
-        return result
+            files.append(changed)
+        return files
 
     # -- files ----------------------------------------------------------
 
@@ -207,6 +269,7 @@ def reader_for(connection, pull_request_ref) -> CodeReader:
 
 __all__ = [
     "MAX_FILE_CHARS",
+    "BranchInfo",
     "AzureError",
     "ChangedFile",
     "CodeReader",

@@ -223,6 +223,34 @@ export function RefreshIcon(props: IconProps) {
   )
 }
 
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Svg {...props} strokeWidth={2}>
+      <path d="M12 4v11" />
+      <path d="M7.5 10.5l4.5 4.5 4.5-4.5" />
+      <path d="M4.5 19.5h15" />
+    </Svg>
+  )
+}
+
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <Svg {...props} strokeWidth={2}>
+      <path d="M6 9.5l6 6 6-6" />
+    </Svg>
+  )
+}
+
+export function QuestionIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M9.6 9.6a2.4 2.4 0 1 1 2.9 2.4v1.4" />
+      <path d="M12.5 16.6v.01" />
+    </Svg>
+  )
+}
+
 /** The product mark: a check in a rounded square. */
 export function BrandMark({ size = 30, className }: IconProps) {
   return (
