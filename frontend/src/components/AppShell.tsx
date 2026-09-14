@@ -51,11 +51,15 @@ export function AppShell({
   title,
   subtitle,
   actions,
+  aside,
   children,
 }: {
   title: string
   subtitle?: ReactNode
   actions?: ReactNode
+  /** A full-height side panel. The header stops at its edge, as in the design,
+   *  instead of stretching over it. */
+  aside?: ReactNode
   children: ReactNode
 }) {
   const { user, signOut } = useAuth()
@@ -147,14 +151,17 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-13 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-5">
-          <h1 className="font-display text-[15px] font-semibold">{title}</h1>
-          {subtitle && <div className="font-mono text-[11px] text-fg-faint">{subtitle}</div>}
-          <div className="flex-1" />
-          {actions}
-        </header>
-        {children}
+      <div className="flex min-w-0 flex-1 flex-col xl:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="flex h-13 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-5">
+            <h1 className="font-display text-[15px] font-semibold">{title}</h1>
+            {subtitle && <div className="font-mono text-[11px] text-fg-faint">{subtitle}</div>}
+            <div className="flex-1" />
+            {actions}
+          </header>
+          {children}
+        </div>
+        {aside}
       </div>
     </div>
   )

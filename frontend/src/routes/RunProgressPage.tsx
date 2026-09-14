@@ -190,12 +190,176 @@ export function RunProgressPage() {
   const cap = Number(run.costCapUsd) || 1;
   const remedy = REMEDIATION[run.errorCode];
   const agentFiles = run.filesRead.filter((f) => f.source === "agent");
-  const doneStages = run.stages.filter((stage) => stage.state === "done").length;
+  const doneStages = run.stages.filter(
+    (stage) => stage.state === "done",
+  ).length;
   const progress =
     run.status === "succeeded"
       ? 100
       : Math.round((doneStages / run.stages.length) * 100);
   const diffFiles = run.filesRead.filter((f) => f.source === "diff");
+
+  // Full height beside the header, not under it — matches the design.
+  const sidePanel = (
+    <aside className="w-full shrink-0 overflow-y-auto border-t border-edge bg-ink-800 px-4.5 py-4.5 xl:w-80 xl:border-t-0 xl:border-l">
+      <p className="label-micro mb-2.5">Produced</p>
+      <div className="mb-5 grid grid-cols-2 gap-2">
+        {[
+          {
+            k: "cases drafted",
+            v: String(run.counts.testCases),
+            color: run.counts.testCases ? "text-fg" : "text-fg-ghost",
+          },
+          {
+            k: "ac covered",
+            // Unknown until test cases exist — "— / 6", never a false 0.
+            v:
+              run.counts.criteriaTotal === 0
+                ? "—"
+                : `${run.counts.criteriaCovered ?? "—"} / ${run.counts.criteriaTotal}`,
+            color:
+              run.counts.criteriaCovered !== null &&
+              run.counts.criteriaTotal > 0
+                ? "text-signal"
+                : "text-fg-ghost",
+          },
+          {
+            k: "code findings",
+            v: String(run.counts.findings),
+            color: run.counts.findings ? "text-warn" : "text-fg-ghost",
+          },
+          {
+            k: "questions",
+            v: String(run.counts.ambiguities),
+            color: run.counts.ambiguities ? "text-warn" : "text-fg-ghost",
+          },
+        ].map((item) => (
+          <div
+            key={item.k}
+            className="rounded-lg border border-edge bg-ink-700 px-3 py-2.5"
+          >
+            <p
+              className={`font-display text-[21px] font-semibold ${item.color}`}
+            >
+              {item.v}
+            </p>
+            <p className="font-mono text-[10px] tracking-[0.06em] text-fg-faint uppercase">
+              {item.k}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {run.pullRequests.length > 0 && (
+        <>
+          <p className="label-micro mb-2">Pull requests</p>
+          <ul className="mb-5 flex flex-col gap-1.5">
+            {run.pullRequests.map((pr) => (
+              <li key={pr.url}>
+                <a
+                  href={pr.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 rounded-md border border-edge bg-ink-700 px-2.5 py-2 no-underline hover:border-edge-strong"
+                >
+                  <BranchIcon size={12} className="shrink-0 text-fg-faint" />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-muted">
+                    #{pr.number} · {pr.repository}
+                  </span>
+                  <span className="font-mono text-[10px] text-fg-faint">
+                    {pr.status}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {(diffFiles.length > 0 || agentFiles.length > 0) && (
+        <>
+          <p className="label-micro mb-2">Reading</p>
+          <ul className="mb-5 flex flex-col gap-1.5">
+            {diffFiles.map((f) => (
+              <li
+                key={`d-${f.path}`}
+                className="rounded-md border border-edge bg-ink-700 px-2.5 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="size-1.5 shrink-0 rounded-full bg-signal" />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-dim">
+                    {f.path}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] text-fg-faint">
+                    +{f.linesAdded} −{f.linesRemoved}
+                  </span>
+                </div>
+              </li>
+            ))}
+            {agentFiles.map((f) => (
+              <li
+                key={`a-${f.path}`}
+                className="rounded-md border border-edge bg-ink-700 px-2.5 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="size-1.5 shrink-0 rounded-full bg-info" />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-dim">
+                    {f.path}
+                  </span>
+                </div>
+                {/* Why the agent pulled this file in — see decision 0001. */}
+                <p className="mt-1 text-[11px] text-fg-faint text-pretty">
+                  {f.reason}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <p className="label-micro mb-2">Budget</p>
+      <div className="rounded-lg border border-edge bg-ink-700 px-3 py-3">
+        <div className="mb-2 flex items-baseline gap-1.5">
+          <span className="font-display text-[18px] font-semibold text-fg">
+            ${cost.toFixed(3)}
+          </span>
+          <span className="font-mono text-[10px] text-fg-faint">
+            of ${cap.toFixed(2)} per-run cap
+          </span>
+        </div>
+        <div className="mb-2.5 h-0.75 overflow-hidden rounded-full bg-edge">
+          <div
+            className="h-0.75 bg-signal"
+            style={{ width: `${Math.min(100, (cost / cap) * 100)}%` }}
+          />
+        </div>
+        <dl className="flex flex-col gap-1 font-mono text-[11px]">
+          <div className="flex justify-between">
+            <dt className="text-fg-faint">model</dt>
+            <dd className="text-fg-muted text-right">{run.model || "—"}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-fg-faint">input</dt>
+            <dd className="text-fg-muted">
+              {tokens(
+                run.tokens.input + run.tokens.cacheRead + run.tokens.cacheWrite,
+              )}{" "}
+              tokens
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-fg-faint">cached</dt>
+            <dd className="text-signal">
+              {tokens(run.tokens.cacheRead)} reused
+            </dd>
+          </div>
+        </dl>
+        <p className="mt-2 text-[11px] text-fg-faint">
+          Cost is recorded when generation finishes.
+        </p>
+      </div>
+    </aside>
+  );
 
   return (
     <AppShell
@@ -223,8 +387,9 @@ export function RunProgressPage() {
           )}
         </div>
       }
+      aside={sidePanel}
     >
-      <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* --- pipeline --- */}
         <div className="min-w-0 flex-1 overflow-y-auto px-6 py-8">
           <div className="mx-auto max-w-190">
@@ -370,163 +535,6 @@ export function RunProgressPage() {
             )}
           </div>
         </div>
-
-        {/* --- side panel --- */}
-        <aside className="w-full shrink-0 overflow-y-auto border-t border-edge bg-ink-800 px-4.5 py-4.5 xl:w-80 xl:border-t-0 xl:border-l">
-          <p className="label-micro mb-2.5">Produced</p>
-          <div className="mb-5 grid grid-cols-2 gap-2">
-            {[
-              {
-                k: "cases drafted",
-                v: String(run.counts.testCases),
-                color: run.counts.testCases ? "text-fg" : "text-fg-ghost",
-              },
-              {
-                k: "ac covered",
-                // Unknown until test cases exist — "— / 6", never a false 0.
-                v:
-                  run.counts.criteriaTotal === 0
-                    ? "—"
-                    : `${run.counts.criteriaCovered ?? "—"} / ${run.counts.criteriaTotal}`,
-                color:
-                  run.counts.criteriaCovered !== null && run.counts.criteriaTotal > 0
-                    ? "text-signal"
-                    : "text-fg-ghost",
-              },
-              {
-                k: "code findings",
-                v: String(run.counts.findings),
-                color: run.counts.findings ? "text-warn" : "text-fg-ghost",
-              },
-              {
-                k: "questions",
-                v: String(run.counts.ambiguities),
-                color: run.counts.ambiguities ? "text-warn" : "text-fg-ghost",
-              },
-            ].map((item) => (
-              <div
-                key={item.k}
-                className="rounded-lg border border-edge bg-ink-700 px-3 py-2.5"
-              >
-                <p
-                  className={`font-display text-[21px] font-semibold ${item.color}`}
-                >
-                  {item.v}
-                </p>
-                <p className="font-mono text-[10px] tracking-[0.06em] text-fg-faint uppercase">
-                  {item.k}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {run.pullRequests.length > 0 && (
-            <>
-              <p className="label-micro mb-2">Pull requests</p>
-              <ul className="mb-5 flex flex-col gap-1.5">
-                {run.pullRequests.map((pr) => (
-                  <li key={pr.url}>
-                    <a
-                      href={pr.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 rounded-md border border-edge bg-ink-700 px-2.5 py-2 no-underline hover:border-edge-strong"
-                    >
-                      <BranchIcon
-                        size={12}
-                        className="shrink-0 text-fg-faint"
-                      />
-                      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-muted">
-                        #{pr.number} · {pr.repository}
-                      </span>
-                      <span className="font-mono text-[10px] text-fg-faint">
-                        {pr.status}
-                      </span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {(diffFiles.length > 0 || agentFiles.length > 0) && (
-            <>
-              <p className="label-micro mb-2">Reading</p>
-              <ul className="mb-5 flex flex-col gap-1.5">
-                {diffFiles.map((f) => (
-                  <li
-                    key={`d-${f.path}`}
-                    className="rounded-md border border-edge bg-ink-700 px-2.5 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="size-1.5 shrink-0 rounded-full bg-signal" />
-                      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-dim">
-                        {f.path}
-                      </span>
-                      <span className="shrink-0 font-mono text-[10px] text-fg-faint">
-                        +{f.linesAdded} −{f.linesRemoved}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-                {agentFiles.map((f) => (
-                  <li
-                    key={`a-${f.path}`}
-                    className="rounded-md border border-edge bg-ink-700 px-2.5 py-2"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="size-1.5 shrink-0 rounded-full bg-info" />
-                      <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-dim">
-                        {f.path}
-                      </span>
-                    </div>
-                    {/* Why the agent pulled this file in — see decision 0001. */}
-                    <p className="mt-1 text-[11px] text-fg-faint text-pretty">
-                      {f.reason}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          <p className="label-micro mb-2">Budget</p>
-          <div className="rounded-lg border border-edge bg-ink-700 px-3 py-3">
-            <div className="mb-2 flex items-baseline gap-1.5">
-              <span className="font-display text-[18px] font-semibold text-fg">
-                ${cost.toFixed(3)}
-              </span>
-              <span className="font-mono text-[10px] text-fg-faint">
-                of ${cap.toFixed(2)} per-run cap
-              </span>
-            </div>
-            <div className="mb-2.5 h-0.75 overflow-hidden rounded-full bg-edge">
-              <div
-                className="h-0.75 bg-signal"
-                style={{ width: `${Math.min(100, (cost / cap) * 100)}%` }}
-              />
-            </div>
-            <dl className="flex flex-col gap-1 font-mono text-[11px]">
-              <div className="flex justify-between">
-                <dt className="text-fg-faint">model</dt>
-                <dd className="text-fg-muted text-right">{run.model || "—"}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-fg-faint">input</dt>
-                <dd className="text-fg-muted">
-                  {tokens(run.tokens.input + run.tokens.cacheRead + run.tokens.cacheWrite)} tokens
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-fg-faint">cached</dt>
-                <dd className="text-signal">{tokens(run.tokens.cacheRead)} reused</dd>
-              </div>
-            </dl>
-            <p className="mt-2 text-[11px] text-fg-faint">
-              Cost is recorded when generation finishes.
-            </p>
-          </div>
-        </aside>
       </div>
     </AppShell>
   );
