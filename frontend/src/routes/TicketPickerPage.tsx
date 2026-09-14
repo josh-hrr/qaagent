@@ -152,6 +152,12 @@ export function TicketPickerPage() {
   return (
     <AppShell
       title="Tickets"
+      // Full height beside the header, as in the design — not under it.
+      aside={
+        !loading && !error && selected ? (
+          <TicketDetail key={selected.id} ticket={selected} />
+        ) : undefined
+      }
       subtitle={subtitle}
       actions={
         <div className="flex items-center gap-2.5">
@@ -194,7 +200,7 @@ export function TicketPickerPage() {
       ) : error ? (
         <SetupPrompt error={error} />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col xl:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col">
           {/* --- list --- */}
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex flex-wrap items-center gap-2 px-5 py-3">
@@ -251,8 +257,6 @@ export function TicketPickerPage() {
             </div>
           </div>
 
-          {/* --- detail --- */}
-          {selected && <TicketDetail key={selected.id} ticket={selected} />}
         </div>
       )}
     </AppShell>
