@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -22,6 +23,25 @@ class StartRunSerializer(serializers.Serializer):
     # could be stale or tampered with, and the snapshot must reflect Linear.
     ticketId = serializers.CharField(max_length=64)
     identifier = serializers.CharField(max_length=40, required=False, allow_blank=True)
+
+
+def _criteria_coverage(run: Run) -> dict:
+    """How many acceptance criteria at least one test case traces to.
+
+    ``criteriaCovered`` stays None until test cases exist: during a run the
+    number is unknown, and the UI shows "— / N" rather than a misleading 0.
+    """
+    total = len((run.snapshot or {}).get("criteria") or [])
+    if not run.test_cases.exists():
+        return {"criteriaTotal": total, "criteriaCovered": None}
+    keys = {c["key"].upper() for c in run.snapshot.get("criteria", [])}
+    traced = {
+        match.upper()
+        for traces in run.test_cases.values_list("traces_to", flat=True)
+        for trace in traces
+        for match in re.findall(r"\bAC-\d+\b", str(trace), re.I)
+    }
+    return {"criteriaTotal": total, "criteriaCovered": len(keys & traced)}
 
 
 def _serialize(run: Run, *, detail: bool) -> dict:
@@ -64,6 +84,7 @@ def _serialize(run: Run, *, detail: bool) -> dict:
             "findings": run.findings.count(),
             "ambiguities": run.ambiguities.count(),
             "filesRead": run.files_read.count(),
+            **_criteria_coverage(run),
         },
     }
     if detail:
@@ -163,4 +184,10 @@ def list_runs(request: Request) -> Response:
     ticket = request.query_params.get("ticketId")
     if ticket:
         runs = runs.filter(ticket_linear_id=ticket)
-    return Response({"runs": [_serialize(run, detail=False) for run in runs[:50]]})
+    return Response(
+        {
+            "runs": [_serialize(run, detail=False) for run in runs[:50]],
+            # For the "N live" badge in the navigation rail.
+            "activeCount": Run.objects.exclude(status__in=TERMINAL_STATUSES).count(),
+        }
+    )

@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 import { useAuth } from '../auth/AuthContext'
+import { runsApi } from '../lib/api'
 import { Button } from './Button'
 import { BrandMark, BranchIcon, GearIcon, PlayIcon, PlugIcon, TagIcon } from './icons'
 
@@ -10,14 +11,27 @@ type NavItem = {
   label: string
   icon: ReactNode
   to?: string
+  /** Matches the current path when it differs from `to`. */
+  activePrefix?: string
   badge?: string
+  /** Built, but nothing to open yet — muted without a "soon" label. */
+  empty?: boolean
 }
 
 /** Items without a `to` are drawn muted — the screen does not exist yet, and
  *  a dead link is worse than a visible gap. */
-function navItems(): NavItem[] {
+function navItems(runs: RunsState): NavItem[] {
   return [
-    { key: 'runs', label: 'Runs', icon: <PlayIcon size={16} /> },
+    {
+      key: 'runs',
+      label: 'Runs',
+      icon: <PlayIcon size={16} />,
+      // No run list screen yet, so Runs opens the most recent run.
+      to: runs.latestId ? `/runs/${runs.latestId}` : undefined,
+      activePrefix: '/runs/',
+      badge: runs.activeCount > 0 ? `${runs.activeCount} live` : undefined,
+      empty: runs.latestId === null,
+    },
     { key: 'tickets', label: 'Tickets', icon: <TagIcon size={16} />, to: '/tickets' },
     { key: 'repos', label: 'Repositories', icon: <BranchIcon size={16} />, to: '/setup/source-code' },
     {
@@ -29,6 +43,8 @@ function navItems(): NavItem[] {
     { key: 'settings', label: 'Settings', icon: <GearIcon size={16} /> },
   ]
 }
+
+type RunsState = { latestId: number | null; activeCount: number }
 
 /** Chrome for the signed-in product screens (04 onward). */
 export function AppShell({
@@ -44,6 +60,22 @@ export function AppShell({
 }) {
   const { user, signOut } = useAuth()
   const { pathname } = useLocation()
+  const [runs, setRuns] = useState<RunsState>({ latestId: null, activeCount: 0 })
+
+  // Once per screen, from our own API — the badge is a hint, not a live feed,
+  // so it does not poll. The run page itself polls its own run.
+  useEffect(() => {
+    let cancelled = false
+    runsApi
+      .list()
+      .then(({ runs: list, activeCount }) => {
+        if (!cancelled) setRuns({ latestId: list[0]?.id ?? null, activeCount })
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [pathname])
 
   return (
     <div className="flex min-h-dvh">
@@ -57,8 +89,10 @@ export function AppShell({
         </div>
 
         <nav className="flex flex-col gap-0.5 px-2.5">
-          {navItems().map((item) => {
-            const active = item.to !== undefined && pathname.startsWith(item.to)
+          {navItems(runs).map((item) => {
+            const active =
+              (item.activePrefix !== undefined && pathname.startsWith(item.activePrefix)) ||
+              (item.to !== undefined && pathname.startsWith(item.to))
             const className = `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] ${
               active
                 ? 'bg-ink-500 font-medium text-fg'
@@ -70,7 +104,11 @@ export function AppShell({
               <>
                 {item.icon}
                 <span className="flex-1">{item.label}</span>
-                {!item.to && <span className="font-mono text-[9.5px]">soon</span>}
+                {item.badge ? (
+                  <span className="font-mono text-[10px] text-signal">{item.badge}</span>
+                ) : (
+                  !item.to && !item.empty && <span className="font-mono text-[9.5px]">soon</span>
+                )}
               </>
             )
             return item.to ? (

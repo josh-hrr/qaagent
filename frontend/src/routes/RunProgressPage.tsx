@@ -94,6 +94,20 @@ const STAGE_STYLES: Record<
   skipped: { dot: "bg-fg-ghost", ring: "border-edge", text: "text-fg-ghost" },
 };
 
+/** Right-hand state word per stage, coloured as in the mockup. */
+const STATE_LABEL: Record<StageState, string> = {
+  done: "text-fg-faint",
+  running: "text-signal",
+  queued: "text-fg-ghost",
+  failed: "text-danger",
+  cancelled: "text-fg-dim",
+  skipped: "text-fg-ghost",
+};
+
+function tokens(n: number): string {
+  return n >= 1000 ? `${Math.round(n / 1000)}k` : String(n);
+}
+
 function elapsed(run: RunDetail): string {
   if (!run.startedAt) return "queued";
   const end = run.finishedAt ? new Date(run.finishedAt).getTime() : Date.now();
@@ -176,6 +190,11 @@ export function RunProgressPage() {
   const cap = Number(run.costCapUsd) || 1;
   const remedy = REMEDIATION[run.errorCode];
   const agentFiles = run.filesRead.filter((f) => f.source === "agent");
+  const doneStages = run.stages.filter((stage) => stage.state === "done").length;
+  const progress =
+    run.status === "succeeded"
+      ? 100
+      : Math.round((doneStages / run.stages.length) * 100);
   const diffFiles = run.filesRead.filter((f) => f.source === "diff");
 
   return (
@@ -193,13 +212,14 @@ export function RunProgressPage() {
         <div className="flex items-center gap-2.5">
           <StatusPill run={run} />
           {running && (
-            <Button
-              variant="secondary"
-              busy={cancelling}
+            <button
+              type="button"
               onClick={() => void cancel()}
+              disabled={cancelling}
+              className="flex h-7 cursor-pointer items-center rounded-md border border-edge-strong px-2.75 text-[12px] text-fg-dim transition-colors hover:border-fg-faint hover:text-fg-muted disabled:cursor-default disabled:opacity-60"
             >
-              Cancel run
-            </Button>
+              {cancelling ? "Cancelling…" : "Cancel run"}
+            </button>
           )}
         </div>
       }
@@ -217,7 +237,7 @@ export function RunProgressPage() {
                     ? "Run cancelled"
                     : "Generating test cases"}
             </h1>
-            <p className="mb-6 flex flex-wrap items-center gap-x-2 text-[13.5px] text-fg-dimmer">
+            <p className="mb-2 flex flex-wrap items-center gap-x-2 text-[13.5px] text-fg-dimmer">
               <span>{run.ticketTitle || "Reading the ticket…"}</span>
               {run.ticketUrl && (
                 <a
@@ -230,6 +250,18 @@ export function RunProgressPage() {
                 </a>
               )}
             </p>
+
+            <div className="mb-6.5 flex items-center gap-2.5">
+              <div className="h-0.75 flex-1 overflow-hidden rounded-full bg-edge">
+                <div
+                  className={`h-0.75 transition-[width] duration-500 ${run.status === "failed" ? "bg-danger" : "bg-signal"}`}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <span className="w-18.5 text-right font-mono text-[11px] text-fg-dimmer">
+                {progress}%
+              </span>
+            </div>
 
             {run.status === "failed" && (
               <div className="mb-6 rounded-[10px] border border-danger-edge bg-danger-bg px-4 py-3.5">
@@ -301,7 +333,9 @@ export function RunProgressPage() {
                           {stage.label}
                         </span>
                         <span className="flex-1" />
-                        <span className="font-mono text-[11px] text-fg-faint">
+                        <span
+                          className={`font-mono text-[11px] ${STATE_LABEL[stage.state]}`}
+                        >
                           {stage.state}
                         </span>
                       </div>
@@ -342,17 +376,40 @@ export function RunProgressPage() {
           <p className="label-micro mb-2.5">Produced</p>
           <div className="mb-5 grid grid-cols-2 gap-2">
             {[
-              { k: "test cases", v: run.counts.testCases },
-              { k: "files read", v: run.counts.filesRead },
-              { k: "findings", v: run.counts.findings },
-              { k: "questions", v: run.counts.ambiguities },
+              {
+                k: "cases drafted",
+                v: String(run.counts.testCases),
+                color: run.counts.testCases ? "text-fg" : "text-fg-ghost",
+              },
+              {
+                k: "ac covered",
+                // Unknown until test cases exist — "— / 6", never a false 0.
+                v:
+                  run.counts.criteriaTotal === 0
+                    ? "—"
+                    : `${run.counts.criteriaCovered ?? "—"} / ${run.counts.criteriaTotal}`,
+                color:
+                  run.counts.criteriaCovered !== null && run.counts.criteriaTotal > 0
+                    ? "text-signal"
+                    : "text-fg-ghost",
+              },
+              {
+                k: "code findings",
+                v: String(run.counts.findings),
+                color: run.counts.findings ? "text-warn" : "text-fg-ghost",
+              },
+              {
+                k: "questions",
+                v: String(run.counts.ambiguities),
+                color: run.counts.ambiguities ? "text-warn" : "text-fg-ghost",
+              },
             ].map((item) => (
               <div
                 key={item.k}
                 className="rounded-lg border border-edge bg-ink-700 px-3 py-2.5"
               >
                 <p
-                  className={`font-display text-[20px] font-semibold ${item.v ? "text-fg" : "text-fg-ghost"}`}
+                  className={`font-display text-[21px] font-semibold ${item.color}`}
                 >
                   {item.v}
                 </p>
@@ -440,7 +497,7 @@ export function RunProgressPage() {
                 ${cost.toFixed(3)}
               </span>
               <span className="font-mono text-[10px] text-fg-faint">
-                of ${cap.toFixed(2)} cap
+                of ${cap.toFixed(2)} per-run cap
               </span>
             </div>
             <div className="mb-2.5 h-0.75 overflow-hidden rounded-full bg-edge">
@@ -455,14 +512,14 @@ export function RunProgressPage() {
                 <dd className="text-fg-muted text-right">{run.model || "—"}</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-fg-faint">elapsed</dt>
-                <dd className="text-fg-muted">{elapsed(run)}</dd>
+                <dt className="text-fg-faint">input</dt>
+                <dd className="text-fg-muted">
+                  {tokens(run.tokens.input + run.tokens.cacheRead + run.tokens.cacheWrite)} tokens
+                </dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-fg-faint">cached reads</dt>
-                <dd className="text-signal">
-                  {run.tokens.cacheRead.toLocaleString()} tokens
-                </dd>
+                <dt className="text-fg-faint">cached</dt>
+                <dd className="text-signal">{tokens(run.tokens.cacheRead)} reused</dd>
               </div>
             </dl>
             <p className="mt-2 text-[11px] text-fg-faint">
@@ -485,11 +542,11 @@ function StatusPill({ run }: { run: RunDetail }) {
   };
   return (
     <span
-      className={`flex h-7 items-center gap-1.5 rounded-md border px-2.5 font-mono text-[11px] ${styles[run.status]}`}
+      className={`flex h-7 items-center gap-1.75 rounded-md border px-2.75 font-mono text-[11px] ${styles[run.status]}`}
     >
-      {(run.status === "running" || run.status === "queued") && (
-        <SpinnerIcon size={11} />
-      )}
+      <span
+        className={`size-1.5 rounded-full bg-current ${run.status === "running" || run.status === "queued" ? "animate-pulse" : ""}`}
+      />
       {run.status === "queued"
         ? "queued — is the worker running?"
         : `${run.status} · ${elapsed(run)}`}

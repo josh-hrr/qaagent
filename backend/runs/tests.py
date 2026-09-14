@@ -529,3 +529,39 @@ class GenerationSettingsCheckTests(TestCase):
 
     def test_bad_effort_is_caught(self):
         self.assertEqual(self.ids(LLM_MODEL="claude-opus-5", LLM_EFFORT="high  # default"), ["runs.E002"])
+
+
+class RunCountsApiTests(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_user("dev@example.com"))
+
+    def run_with(self, criteria, traces=None):
+        run = Run.objects.create(
+            ticket_linear_id="lin_1", status=RunStatus.SUCCEEDED if traces is not None else RunStatus.RUNNING,
+            snapshot={"criteria": [{"key": k, "text": "x"} for k in criteria]},
+        )
+        for n, trace in enumerate(traces or [], start=1):
+            GeneratedCase.objects.create(run=run, number=n, title="t", traces_to=trace)
+        return run
+
+    def counts(self, run):
+        return self.client.get(reverse("runs:detail", args=[run.pk])).json()["run"]["counts"]
+
+    def test_coverage_is_unknown_while_running(self):
+        counts = self.counts(self.run_with(["AC-1", "AC-2"]))
+        self.assertEqual((counts["criteriaTotal"], counts["criteriaCovered"]), (2, None))
+
+    def test_coverage_counts_distinct_traced_criteria(self):
+        run = self.run_with(["AC-1", "AC-2", "AC-3"], traces=[["AC-1", "/a.py:3"], ["ac-1"], ["AC-3"]])
+        counts = self.counts(run)
+        self.assertEqual((counts["criteriaTotal"], counts["criteriaCovered"]), (3, 2))
+
+    def test_traces_to_criteria_not_on_the_ticket_do_not_count(self):
+        run = self.run_with(["AC-1"], traces=[["AC-9"]])
+        self.assertEqual(self.counts(run)["criteriaCovered"], 0)
+
+    def test_list_reports_active_runs(self):
+        Run.objects.create(ticket_linear_id="a", status=RunStatus.RUNNING)
+        Run.objects.create(ticket_linear_id="b", status=RunStatus.QUEUED)
+        Run.objects.create(ticket_linear_id="c", status=RunStatus.SUCCEEDED)
+        self.assertEqual(self.client.get(reverse("runs:list")).json()["activeCount"], 2)

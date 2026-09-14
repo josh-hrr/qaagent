@@ -356,7 +356,15 @@ export type RunSummary = {
   startedAt: string | null
   finishedAt: string | null
   isTerminal: boolean
-  counts: { testCases: number; findings: number; ambiguities: number; filesRead: number }
+  counts: {
+    testCases: number
+    findings: number
+    ambiguities: number
+    filesRead: number
+    criteriaTotal: number
+    /** Null until test cases exist — unknown mid-run, not zero. */
+    criteriaCovered: number | null
+  }
 }
 
 export type RunDetail = RunSummary & {
@@ -381,6 +389,7 @@ export const runsApi = {
   start: (ticketId: string, identifier: string) =>
     api.post<{ run: RunSummary; existing: boolean }>('/runs/start/', { ticketId, identifier }),
   get: (runId: number | string) => api.get<{ run: RunDetail }>(`/runs/${runId}/`),
+  list: () => api.get<{ runs: RunSummary[]; activeCount: number }>('/runs/'),
   cancel: (runId: number | string) => api.post<{ run: RunSummary }>(`/runs/${runId}/cancel/`),
 }
 
