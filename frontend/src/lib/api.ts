@@ -574,7 +574,7 @@ export const reviewApi = {
 
 /* --- export (screen 07) ---------------------------------------------------- */
 
-export type FileFormat = 'csv' | 'md' | 'zip'
+export type FileFormat = 'csv' | 'md'
 export type MarkdownLayout = 'table' | 'sections'
 export type ExportScope = 'all' | 'selected' | 'approved'
 

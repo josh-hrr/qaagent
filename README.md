@@ -306,12 +306,15 @@ The **Export** button on a reviewed run. One dialog, previewing the real file:
 
 - **`.csv`** with a UTF-8 BOM and CRLF, so Excel opens it without a wizard and
   TestRail/Xray import it. **`.md`** as one pipe table or a section per case,
-  for a pull request or a wiki. **`.zip`** for both, from the same rows.
+  for a pull request or a wiki. One file per download: a single preview cannot
+  honestly show two.
 - **14 columns** to choose from; `testcase#` and `test_title` are required.
 - **Which cases**: all, the ones ticked in the table, or approved only.
   **Rejected cases are never exported** — somebody deliberately threw them out.
 - **Toggles** for numbered steps in one cell, a blank `actual_result` column,
-  and a run summary header (ticket, source, commit, coverage).
+  and a run summary header (ticket, source, commit, coverage). The numbering
+  toggle is hidden for the section layout, where steps are a real list and it
+  would change nothing.
 - The preview is rendered by the same server code as the download, so what is
   on screen is the file — including its exact size.
 - **Choices are remembered per user** on download, and **every download is

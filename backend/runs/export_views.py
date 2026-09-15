@@ -141,7 +141,7 @@ def export_download(request: Request, run_id: int) -> HttpResponse:
         run=run,
         exported_by=request.user,
         file_format=settings.file_format,
-        layout=settings.layout if settings.file_format in ("md", "zip") else "",
+        layout=settings.layout if settings.file_format == "md" else "",
         scope=settings.scope,
         columns=[c.key for c in settings.active],
         options=settings.options,

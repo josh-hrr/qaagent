@@ -28,7 +28,6 @@ const FORMATS: { key: FileFormat; label: string; note: string }[] = [
     label: ".md",
     note: "Best for review inside a pull request or a team wiki — the file stays diffable in git.",
   },
-  { key: "zip", label: ".zip — both", note: "Both files in one archive, generated from the same rows." },
 ];
 
 const LAYOUTS: { key: MarkdownLayout; label: string; note: string }[] = [
@@ -36,8 +35,23 @@ const LAYOUTS: { key: MarkdownLayout; label: string; note: string }[] = [
   { key: "sections", label: "One section per case", note: "Readable in a PR description or wiki." },
 ];
 
-const OPTIONS: { key: "numberedSteps" | "blankActual" | "runHeader"; label: string; note: string }[] = [
-  { key: "numberedSteps", label: "Keep steps numbered in one cell", note: "Off joins them with semicolons instead." },
+type OptionKey = "numberedSteps" | "blankActual" | "runHeader";
+
+const OPTIONS: {
+  key: OptionKey;
+  label: string;
+  note: string;
+  /** Hidden where it would change nothing — an inert toggle is a lie. */
+  applies?: (settings: ExportSettings) => boolean;
+}[] = [
+  {
+    key: "numberedSteps",
+    label: "Keep steps numbered in one cell",
+    note: "Off joins them with semicolons instead.",
+    // The section layout writes steps as a real Markdown list; there is no
+    // single cell for this to change.
+    applies: (settings) => !(settings.fileFormat === "md" && settings.layout === "sections"),
+  },
   { key: "blankActual", label: "Leave actual_result blank", note: 'Off pre-fills every row with "Not run".' },
   { key: "runHeader", label: "Prepend a run summary header", note: "Ticket, source, commit and coverage above the rows." },
 ];
@@ -45,7 +59,6 @@ const OPTIONS: { key: "numberedSteps" | "blankActual" | "runHeader"; label: stri
 const PREVIEW_DEBOUNCE_MS = 250;
 
 function previewNote(settings: ExportSettings): string {
-  if (settings.fileFormat === "zip") return "The archive holds the CSV above plus the Markdown rendering of the same rows.";
   if (settings.fileFormat === "md" && settings.layout === "sections")
     return "Readable as a PR comment or a wiki page — one heading per case, steps as a real list.";
   if (settings.fileFormat === "md")
@@ -60,7 +73,7 @@ function size(bytes: number): string {
 
 function initialSettings(remembered: Partial<ExportSettings> | null, selected: number[], preferSelection: boolean): ExportSettings {
   return {
-    fileFormat: remembered?.fileFormat ?? "csv",
+    fileFormat: remembered?.fileFormat === "md" ? "md" : "csv",
     layout: remembered?.layout ?? "table",
     scope: preferSelection && selected.length > 0 ? "selected" : (remembered?.scope ?? "all"),
     columns: remembered?.columns?.length ? remembered.columns : DEFAULT_COLUMNS,
@@ -214,7 +227,7 @@ export function ExportDialog({
               {FORMATS.find((f) => f.key === settings.fileFormat)?.note}
             </p>
 
-            {settings.fileFormat !== "csv" && (
+            {settings.fileFormat === "md" && (
               <div className="mb-5">
                 <p className="label-micro mb-2.25">Markdown layout</p>
                 <div className="flex gap-2">
@@ -323,7 +336,7 @@ export function ExportDialog({
 
             <p className="label-micro mb-2.25">Options</p>
             <div className="flex flex-col gap-1.5">
-              {OPTIONS.map((option) => {
+              {OPTIONS.filter((option) => option.applies?.(settings) ?? true).map((option) => {
                 const on = settings[option.key];
                 return (
                   <button

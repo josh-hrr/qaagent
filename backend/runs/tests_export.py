@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import io
-import zipfile
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -105,13 +103,19 @@ class ExportRenderingTests(TestCase):
         self.assertIn("**expected_result:** 401 refresh_token_reused", text)
         self.assertIn("**actual_result:** _(blank)_", text)
 
-    def test_zip_holds_both_renderings(self):
-        payload, content_type = exporting.build(self.run, [self.case], settings_for(file_format="zip"))
-        self.assertEqual(content_type, "application/zip")
-        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-            names = sorted(archive.namelist())
-            self.assertEqual([n.rsplit(".", 1)[1] for n in names], ["csv", "md"])
-            self.assertTrue(archive.read(names[0]).startswith(b"\xef\xbb\xbf"))
+    def test_columns_keep_their_canonical_order(self):
+        # Chosen in any order, written in the order a tester reads a case.
+        text = self.csv_text(columns=["steps", "type", "preconditions", "description", "priority"])
+        self.assertTrue(
+            text.startswith("testcase#,priority,test_type,test_title,test_description,preconditions,test_steps\r\n"),
+            text[:120],
+        )
+
+    def test_numbering_does_not_apply_to_the_section_layout(self):
+        # The section layout writes a real list, so there is no cell to change.
+        self.assertFalse(exporting.numbering_applies(settings_for(file_format="md", layout="sections")))
+        for applicable in [settings_for(), settings_for(file_format="md", layout="table")]:
+            self.assertTrue(exporting.numbering_applies(applicable))
 
     def test_preview_says_how_much_it_is_not_showing(self):
         for number in range(2, 6):
@@ -198,11 +202,8 @@ class ExportApiTests(TestCase):
         self.assertEqual(preferences["scope"], "all")
         self.assertIn("id", preferences["columns"])
 
-    def test_zip_download_is_one_archive(self):
-        response = self.client.get(self.url("export-download", "?fileFormat=zip"))
-        self.assertEqual(response["Content-Type"], "application/zip")
-        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-            self.assertEqual(len(archive.namelist()), 2)
+    def test_an_unknown_format_is_refused(self):
+        self.assertEqual(self.client.get(self.url("export-download", "?fileFormat=zip")).status_code, 400)
 
     def test_a_download_with_nothing_in_it_is_refused(self):
         response = self.client.get(self.url("export-download", "?scope=selected&caseNumbers=99"))

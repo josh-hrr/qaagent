@@ -12,7 +12,6 @@ from __future__ import annotations
 import csv
 import io
 import re
-import zipfile
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -34,17 +33,19 @@ class Column:
     required: bool = False
 
 
+# Order matters: this is the order of the columns in every file, and it reads
+# the way a tester works down a case — what it is, what it needs, what to do.
 COLUMNS: list[Column] = [
     Column("id", "testcase#", required=True),
     Column("status", "status"),
     Column("priority", "priority"),
+    Column("type", "test_type"),
     Column("title", "test_title", required=True),
     Column("description", "test_description"),
+    Column("preconditions", "preconditions"),
     Column("steps", "test_steps"),
     Column("expected", "expected_result"),
     Column("actual", "actual_result"),
-    Column("type", "test_type"),
-    Column("preconditions", "preconditions"),
     Column("traces", "traces_to"),
     Column("suite", "suite"),
     Column("ticket", "ticket"),
@@ -55,7 +56,7 @@ REQUIRED_KEYS = [c.key for c in COLUMNS if c.required]
 # What the dialog opens with: the columns a manual tester fills in during a run.
 DEFAULT_COLUMNS = ["id", "status", "priority", "title", "description", "steps", "expected", "actual"]
 
-FORMATS = ["csv", "md", "zip"]
+FORMATS = ["csv", "md"]
 LAYOUTS = ["table", "sections"]
 SCOPES = ["all", "selected", "approved"]
 OPTION_KEYS = ["numbered_steps", "blank_actual", "run_header"]
@@ -104,6 +105,12 @@ def select_cases(run: Run, settings: ExportSettings) -> list[TestCase]:
     # A rejected case is one a reviewer threw out. Exporting it would put work
     # back into the tracker that somebody deliberately removed.
     return list(cases.exclude(status=TestCaseStatus.REJECTED))
+
+
+def numbering_applies(settings: ExportSettings) -> bool:
+    """False for the section layout, which writes steps as a real list — there
+    is no single cell for the toggle to change."""
+    return not (settings.file_format == "md" and settings.layout == "sections")
 
 
 def _steps(case: TestCase, settings: ExportSettings) -> str:
@@ -194,7 +201,7 @@ def _header_lines(run: Run, cases: list[TestCase]) -> list[str]:
 
 
 def filename(run: Run, settings: ExportSettings) -> str:
-    extension = {"csv": ".csv", "md": ".md", "zip": ".zip"}[settings.file_format]
+    extension = ".md" if settings.file_format == "md" else ".csv"
     identifier = run.ticket_identifier or f"run-{run.pk}"
     return f"{identifier}_test-cases_{date.today().isoformat()}{extension}"
 
@@ -266,20 +273,6 @@ def render(run: Run, cases: list[TestCase], settings: ExportSettings) -> str:
 
 def build(run: Run, cases: list[TestCase], settings: ExportSettings) -> tuple[bytes, str]:
     """The bytes to download, and their content type."""
-    if settings.file_format == "zip":
-        csv_text = render_csv(run, cases, settings)
-        markdown = (
-            render_markdown_sections(run, cases, settings)
-            if settings.layout == "sections"
-            else render_markdown_table(run, cases, settings)
-        )
-        stem = filename(run, settings).removesuffix(".zip")
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr(f"{stem}.csv", (BOM + csv_text).encode("utf-8"))
-            archive.writestr(f"{stem}.md", markdown.encode("utf-8"))
-        return buffer.getvalue(), "application/zip"
-
     if settings.file_format == "md":
         return render(run, cases, settings).encode("utf-8"), "text/markdown; charset=utf-8"
     return (BOM + render_csv(run, cases, settings)).encode("utf-8"), "text/csv; charset=utf-8"
