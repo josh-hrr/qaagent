@@ -7,8 +7,6 @@ it can't pin down.
 ```
 backend/    Django 6 + DRF API
 frontend/   React 19 + TypeScript + Tailwind 4 (Vite)
-design/     Design canvas — 11 screens of the Phase 1 flow
-docs/       Notes, starting with the original brief
 ```
 
 ## Running it
@@ -86,9 +84,7 @@ a trailing `=` is a soft line break — so join the pieces before opening it. Po
 | 06 | Review workspace | **built** — `/runs/:id/review` |
 | 07 | Export CSV / Markdown | designed |
 
-Screens 02–07 and the empty/error states live in the design canvas
-(`design/qa-agent-phase-1.html`, or the hosted version). Build order follows the
-numbering.
+Build order follows the numbering.
 
 ## How auth works
 
@@ -190,8 +186,7 @@ Azure DevOps API, file by file (see screen 05). `last_indexed_commit` stays
 empty, so the UI says "not cloned yet" rather than claiming an index that does
 not exist.
 
-**How much code a run reads** is decided by the agent, not by a fixed rule — see
-[`docs/decisions/0001-scope-expansion.md`](docs/decisions/0001-scope-expansion.md).
+**How much code a run reads** is decided by the agent, not by a fixed rule.
 It starts from the diff and follows the change into whatever it affects, bounded
 by hop, file and token limits. Repositories are deliberately not indexed ahead of
 time, because scope depends on the diff.
@@ -275,7 +270,6 @@ scope, read the changed files, draft test cases, cross-check.
   merged ones are kept.
 - **The agent follows the change** with read-only `read_file` and
   `list_directory` tools, each call carrying a reason that is recorded and shown.
-  See [decision 0001](docs/decisions/0001-scope-expansion.md).
 - **Bounded**: 40 files, 12 model rounds, $1.00 per run by default. Hitting a
   bound marks the run *stopped early* rather than implying full coverage.
 - **Cancel** is a flag the worker checks at stage and round boundaries, so a

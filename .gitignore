@@ -25,3 +25,7 @@ Thumbs.db
 
 # Local email dumps from the file email backend
 backend/tmp/
+
+# Design canvas and internal notes — kept local, not shared with the repo
+design/
+docs/
