@@ -5,12 +5,13 @@ from django.conf import settings
 from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import Client, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
+from .apps import INSECURE_SECRET_KEY, check_sign_in_policy
 from .middleware import SESSION_STARTED_KEY
 from .models import MagicLinkToken, User
-from .services import SignInError, consume_magic_link
+from .services import SignInError, client_ip, consume_magic_link
 
 
 def link_token_from_last_email() -> str:
@@ -308,3 +309,41 @@ class UserModelTests(TestCase):
         user = User.objects.create_user("Mixed.Case@Example.COM")
         self.assertEqual(user.email, "mixed.case@example.com")
         self.assertFalse(user.has_usable_password())
+
+
+class SignInPolicyCheckTests(TestCase):
+    """The two settings that silently open the door in production."""
+
+    def ids(self, **overrides):
+        settings = {"DEBUG": False, "SECRET_KEY": "a-real-long-random-value", "ALLOWED_EMAIL_DOMAINS": ["x.com"]}
+        settings.update(overrides)
+        with override_settings(**settings):
+            return [problem.id for problem in check_sign_in_policy(None)]
+
+    def test_configured_production_passes(self):
+        self.assertEqual(self.ids(), [])
+
+    def test_default_secret_key_is_an_error(self):
+        self.assertIn("accounts.E001", self.ids(SECRET_KEY=INSECURE_SECRET_KEY))
+
+    def test_open_sign_up_is_warned_about(self):
+        self.assertIn("accounts.W001", self.ids(ALLOWED_EMAIL_DOMAINS=[]))
+
+    def test_development_is_left_alone(self):
+        self.assertEqual(self.ids(DEBUG=True, SECRET_KEY=INSECURE_SECRET_KEY, ALLOWED_EMAIL_DOMAINS=[]), [])
+
+
+class ClientIpTests(TestCase):
+    def request_with(self, **meta):
+        request = RequestFactory().post("/api/auth/magic-link/", **meta)
+        return client_ip(request)
+
+    def test_forwarded_header_is_ignored_without_a_proxy(self):
+        with override_settings(SECURE_PROXY_SSL_HEADER=None):
+            ip = self.request_with(HTTP_X_FORWARDED_FOR="9.9.9.9", REMOTE_ADDR="10.0.0.1")
+        self.assertEqual(ip, "10.0.0.1")
+
+    def test_forwarded_header_is_used_behind_a_proxy(self):
+        with override_settings(SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https")):
+            ip = self.request_with(HTTP_X_FORWARDED_FOR="9.9.9.9, 10.0.0.5", REMOTE_ADDR="10.0.0.1")
+        self.assertEqual(ip, "9.9.9.9")

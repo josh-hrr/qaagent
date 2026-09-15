@@ -40,9 +40,16 @@ def email_domain_allowed(email: str) -> bool:
 
 
 def client_ip(request) -> str | None:
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """The caller's address, used for rate limiting.
+
+    X-Forwarded-For is only read when something in front of Django is known to
+    set it (TRUST_PROXY_SSL_HEADER). Trusting it otherwise lets a caller invent
+    a new address per request and walk straight past the per-IP limit.
+    """
+    if getattr(settings, "SECURE_PROXY_SSL_HEADER", None):
+        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR")
 
 

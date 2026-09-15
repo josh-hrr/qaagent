@@ -354,6 +354,25 @@ serves `index.html` — it is ignored inside a `<meta>` tag, so clickjacking
 protection cannot come from the bundle. Django already sends it for its own
 responses.
 
+### Before deploying anywhere real
+
+Run `python manage.py check --deploy`. It fails on the two settings that
+otherwise open the door silently:
+
+- **`accounts.E001`** — `DJANGO_SECRET_KEY` still the default. That value is in
+  this repository, and it signs session cookies: anyone who has read the source
+  could mint one.
+- **`accounts.W001`** — `ALLOWED_EMAIL_DOMAINS` empty. Sign-in provisions a user
+  on first use, so an empty list means anyone who can reach the server can sign
+  themselves in, and every account sees the Linear key's data, the connected
+  repositories and the model spend. Set it to your company domains.
+- **`connections.E001`–`E003`** — the credential encryption key is missing,
+  invalid, or the development fallback.
+
+`X-Forwarded-For` is only trusted for rate limiting when `TRUST_PROXY_SSL_HEADER`
+says a proxy sets it; without that, a caller could invent an address per request
+and walk past the per-IP limit on sign-in links.
+
 Still open, worth doing once there are stored credentials to protect: a session
 inventory with "sign out everywhere", and re-authentication before revealing or
 changing the workspace's Azure DevOps PAT and Linear key.
