@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { AppShell } from "../components/AppShell";
+import { ExportDialog } from "../components/ExportDialog";
 import {
   AlertIcon,
   BranchIcon,
@@ -118,6 +119,7 @@ export function ReviewWorkspacePage() {
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [notice, setNotice] = useState("");
   const [rerunning, setRerunning] = useState(false);
+  const [exporting, setExporting] = useState<{ preferSelection: boolean } | null>(null);
   const noticeTimer = useRef<number | null>(null);
 
   const flash = useCallback((message: string) => {
@@ -347,12 +349,12 @@ export function ReviewWorkspacePage() {
             {rerunning ? <SpinnerIcon size={14} /> : <RefreshIcon size={14} />}
             Re-run on latest commit
           </button>
-          {/* Export is screen 07 — drawn disabled, not as a dead button. */}
           <button
             type="button"
-            disabled
-            title="Export arrives with screen 07"
-            className="flex h-7.5 cursor-not-allowed items-center gap-1.75 rounded-md bg-edge px-3.25 text-[12px] font-semibold text-fg-faint"
+            onClick={() => setExporting({ preferSelection: false })}
+            disabled={!finished || cases.length === 0}
+            title={cases.length === 0 ? "This run produced no test cases" : "Export as CSV or Markdown"}
+            className="flex h-7.5 cursor-pointer items-center gap-1.75 rounded-md bg-signal px-3.25 text-[12px] font-semibold text-ink-900 hover:bg-signal-bright disabled:cursor-not-allowed disabled:bg-edge disabled:text-fg-faint"
           >
             <DownloadIcon size={14} />
             Export
@@ -486,6 +488,14 @@ export function ReviewWorkspacePage() {
                 </span>
               )}
             </div>
+          )}
+
+          {/* --- what was already sent out --- */}
+          {data.exports.length > 0 && (
+            <p className="mt-2 font-mono text-[11px] text-fg-faint">
+              last export {data.exports[0].filename} · {data.exports[0].caseCount} cases
+              {data.exports[0].exportedBy ? ` · ${data.exports[0].exportedBy}` : ""} · {ago(data.exports[0].createdAt)}
+            </p>
           )}
 
           {/* --- tabs --- */}
@@ -665,6 +675,7 @@ export function ReviewWorkspacePage() {
                   { action: "set_status", value: "approved" },
                 )
               }
+              onExport={() => setExporting({ preferSelection: checkedList.length > 0 })}
             />
           </div>
 
@@ -687,6 +698,21 @@ export function ReviewWorkspacePage() {
           </aside>
         </div>
       </div>
+
+      {exporting && (
+        <ExportDialog
+          run={run}
+          selected={checkedList}
+          preferSelection={exporting.preferSelection}
+          onClose={() => setExporting(null)}
+          onExported={(filename) => {
+            setExporting(null);
+            flash(`Downloaded ${filename}`);
+            // Pick up the new export record for the "last exported" line.
+            void reviewApi.get(run.id).then(setData).catch(() => undefined);
+          }}
+        />
+      )}
     </AppShell>
   );
 }
@@ -813,6 +839,7 @@ function SelectionBar({
   notice,
   onBulk,
   onApproveAll,
+  onExport,
 }: {
   total: number;
   checked: number[];
@@ -820,6 +847,7 @@ function SelectionBar({
   notice: string;
   onBulk: (action: BulkAction) => void;
   onApproveAll: () => void;
+  onExport: () => void;
 }) {
   const none = checked.length === 0 || !editable;
   const select =
@@ -884,9 +912,9 @@ function SelectionBar({
       </button>
       <button
         type="button"
-        disabled
-        title="Export arrives with screen 07"
-        className="flex h-7 cursor-not-allowed items-center rounded-md bg-edge px-2.75 text-[12px] font-semibold text-fg-faint"
+        onClick={onExport}
+        disabled={!editable || total === 0}
+        className="flex h-7 cursor-pointer items-center rounded-md bg-signal px-2.75 text-[12px] font-semibold text-ink-900 hover:bg-signal-bright disabled:cursor-not-allowed disabled:bg-edge disabled:text-fg-faint"
       >
         {checked.length > 0 ? `Export ${checked.length} selected` : `Export all ${total}`}
       </button>

@@ -45,6 +45,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'signedIn', user })
   }, [])
 
+  // Used after the server writes to the user row — remembered export settings,
+  // for one — so the next screen reads the new value instead of a stale copy.
+  const refresh = useCallback(async () => {
+    try {
+      const { user } = await authApi.session()
+      setState({ status: 'signedIn', user })
+    } catch {
+      // A failed refresh is not a sign-out: keep what we have.
+    }
+  }, [])
+
   const signOut = useCallback(async () => {
     try {
       await authApi.signOut()
@@ -53,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value = useMemo(() => ({ ...state, setUser, signOut }), [state, setUser, signOut])
+  const value = useMemo(() => ({ ...state, setUser, refresh, signOut }), [state, setUser, refresh, signOut])
 
   return <AuthContext value={value}>{children}</AuthContext>
 }

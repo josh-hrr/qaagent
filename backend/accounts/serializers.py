@@ -10,10 +10,15 @@ class UserSerializer(serializers.ModelSerializer):
     jobTitle = serializers.CharField(source="job_title", read_only=True)
     avatarUrl = serializers.CharField(source="avatar_url", read_only=True)
     initials = serializers.CharField(read_only=True)
+    # Last export choices, so the dialog opens where this user left it.
+    exportPreferences = serializers.JSONField(source="export_preferences", read_only=True)
 
     class Meta:
         model = User
-        fields = ("id", "email", "fullName", "displayName", "initials", "jobTitle", "avatarUrl")
+        fields = (
+            "id", "email", "fullName", "displayName", "initials", "jobTitle", "avatarUrl",
+            "exportPreferences",
+        )
         read_only_fields = fields
 
 

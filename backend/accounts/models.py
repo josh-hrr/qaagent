@@ -55,6 +55,11 @@ class User(AbstractUser):
     avatar_url = models.URLField(blank=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
 
+    # Last export choices (format, columns, scope, toggles), so a team that
+    # exports for the same tool every sprint picks its columns once. Shape is
+    # validated by runs.exporting.ExportSettings before it is written.
+    export_preferences = models.JSONField(default=dict, blank=True)
+
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS: list[str] = []
 

@@ -164,6 +164,8 @@ export type User = {
   initials: string
   jobTitle: string
   avatarUrl: string
+  /** Last export choices, so the dialog opens where this user left it. */
+  exportPreferences: Partial<ExportSettings> | null
 }
 
 export type SsoProvider = {
@@ -481,11 +483,24 @@ export type ReviewRun = {
   criteriaCovered: number | null
 }
 
+export type ExportRecord = {
+  id: number
+  filename: string
+  fileFormat: FileFormat
+  scope: ExportScope
+  caseCount: number
+  byteSize: number
+  exportedBy: string | null
+  createdAt: string
+}
+
 export type ReviewResponse = {
   run: ReviewRun
   testCases: ReviewTestCase[]
   findings: ReviewFinding[]
   ambiguities: ReviewAmbiguity[]
+  /** Most recent downloads of this run, newest first. */
+  exports: ExportRecord[]
 }
 
 export type TicketDrift =
@@ -541,6 +556,81 @@ export const reviewApi = {
     api.post<{ finding: ReviewFinding }>(`/runs/${runId}/findings/${findingId}/dismiss/`, { dismissed }),
   answer: (runId: number, ambiguityId: number, answer: string) =>
     api.post<{ ambiguity: ReviewAmbiguity }>(`/runs/${runId}/ambiguities/${ambiguityId}/answer/`, { answer }),
+}
+
+/* --- export (screen 07) ---------------------------------------------------- */
+
+export type FileFormat = 'csv' | 'md' | 'zip'
+export type MarkdownLayout = 'table' | 'sections'
+export type ExportScope = 'all' | 'selected' | 'approved'
+
+export type ExportSettings = {
+  fileFormat: FileFormat
+  layout: MarkdownLayout
+  scope: ExportScope
+  columns: string[]
+  caseNumbers: number[]
+  numberedSteps: boolean
+  blankActual: boolean
+  runHeader: boolean
+}
+
+export type ExportColumn = { key: string; header: string; required: boolean }
+
+export type ExportPreview = {
+  preview: string
+  filename: string
+  byteSize: number
+  caseCount: number
+  counts: { all: number; approved: number; rejectedExcluded: number }
+  columns: ExportColumn[]
+}
+
+function exportQuery(settings: ExportSettings): string {
+  return new URLSearchParams({
+    fileFormat: settings.fileFormat,
+    layout: settings.layout,
+    scope: settings.scope,
+    columns: settings.columns.join(','),
+    caseNumbers: settings.caseNumbers.join(','),
+    numberedSteps: settings.numberedSteps ? '1' : '0',
+    blankActual: settings.blankActual ? '1' : '0',
+    runHeader: settings.runHeader ? '1' : '0',
+  }).toString()
+}
+
+/** Reads the name the server chose, so the saved file matches the preview. */
+function filenameFrom(header: string | null, fallback: string): string {
+  const match = header?.match(/filename="([^"]+)"/)
+  return match ? match[1] : fallback
+}
+
+export const exportApi = {
+  preview: (runId: number | string, settings: ExportSettings) =>
+    api.get<ExportPreview>(`/runs/${runId}/export/preview/?${exportQuery(settings)}`),
+
+  /** Fetches the bytes, then hands them to the browser as a save. */
+  download: async (runId: number | string, settings: ExportSettings, fallbackName: string) => {
+    const response = await fetch(`/api/runs/${runId}/export/download/?${exportQuery(settings)}`, {
+      credentials: 'same-origin',
+    })
+    if (!response.ok) {
+      const body: unknown = await response.json().catch(() => ({}))
+      throw parseErrorBody((body ?? {}) as ErrorBody, response.status)
+    }
+    const name = filenameFrom(response.headers.get('Content-Disposition'), fallbackName)
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = name
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
+    // Freed on the next tick: revoking immediately cancels the save in Safari.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    return { filename: name, byteSize: blob.size }
+  },
 }
 
 export const authApi = {

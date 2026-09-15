@@ -10,6 +10,8 @@ export type AuthState =
 export type AuthContextValue = AuthState & {
   /** Record a user returned by a sign-in call. */
   setUser: (user: User) => void
+  /** Re-read the user after the server changed something on it. */
+  refresh: () => Promise<void>
   signOut: () => Promise<void>
 }
 

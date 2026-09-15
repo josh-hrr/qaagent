@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import review, views
+from . import export_views, review, views
 
 app_name = "runs"
 
@@ -17,4 +17,7 @@ urlpatterns = [
     path("<int:run_id>/findings/<int:finding_id>/test-case/", review.finding_to_test_case, name="finding-to-test-case"),
     path("<int:run_id>/findings/<int:finding_id>/dismiss/", review.dismiss_finding, name="dismiss-finding"),
     path("<int:run_id>/ambiguities/<int:ambiguity_id>/answer/", review.answer_ambiguity, name="answer-ambiguity"),
+    # Screen 07 — export
+    path("<int:run_id>/export/preview/", export_views.export_preview, name="export-preview"),
+    path("<int:run_id>/export/download/", export_views.export_download, name="export-download"),
 ]

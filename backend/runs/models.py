@@ -223,3 +223,31 @@ class Ambiguity(models.Model):
 
     class Meta:
         ordering = ("id",)
+
+
+class ExportRecord(models.Model):
+    """One download of a run's test cases.
+
+    Answers "which cases went into the tracker, in what shape, and who sent
+    them" months later — the question that otherwise gets answered by guessing.
+    """
+
+    run = models.ForeignKey(Run, on_delete=models.CASCADE, related_name="exports")
+    exported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    file_format = models.CharField(max_length=8)  # csv | md | zip
+    layout = models.CharField(max_length=12, blank=True)  # markdown only
+    scope = models.CharField(max_length=12)  # all | selected | approved
+    columns = models.JSONField(default=list)
+    options = models.JSONField(default=dict)
+    case_numbers = models.JSONField(default=list)
+    filename = models.CharField(max_length=200)
+    byte_size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return f"{self.filename} ({len(self.case_numbers)} cases)"

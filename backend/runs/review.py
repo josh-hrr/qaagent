@@ -30,6 +30,7 @@ from tickets.linear_issues import fetch_issue
 from .azure_code import CodeReader
 from .models import (
     Ambiguity,
+    ExportRecord,
     FileSource,
     Finding,
     Priority,
@@ -38,6 +39,7 @@ from .models import (
     TestCase,
     TestCaseStatus,
 )
+from . import exporting
 from .scope import snapshot_hash
 from .views import _criteria_coverage
 
@@ -230,6 +232,20 @@ def _all(run: Run) -> dict:
         "testCases": [_case(c, links) for c in cases],
         "findings": [_finding(f, links) for f in run.findings.all()],
         "ambiguities": [_ambiguity(a) for a in run.ambiguities.select_related("answered_by")],
+        "exports": [_export(e) for e in run.exports.select_related("exported_by")[:5]],
+    }
+
+
+def _export(record: ExportRecord) -> dict:
+    return {
+        "id": record.pk,
+        "filename": record.filename,
+        "fileFormat": record.file_format,
+        "scope": record.scope,
+        "caseCount": len(record.case_numbers),
+        "byteSize": record.byte_size,
+        "exportedBy": record.exported_by.email if record.exported_by_id else None,
+        "createdAt": record.created_at.isoformat(),
     }
 
 
