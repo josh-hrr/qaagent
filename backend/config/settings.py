@@ -1,7 +1,10 @@
 """Django settings for the QA Agent backend.
 
-Configuration comes from environment variables (see ``.env.example``). The only
-value that must be set outside development is ``DJANGO_SECRET_KEY``.
+Configuration comes from environment variables, read from ``backend/.env``,
+which is not in version control. The ``env(...)`` block below is the list of
+what can be set, with the development defaults. Outside development
+``DJANGO_SECRET_KEY`` and ``CREDENTIAL_ENCRYPTION_KEY`` must be set — see
+``manage.py check --deploy``.
 """
 
 from pathlib import Path

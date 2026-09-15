@@ -23,7 +23,6 @@ cd backend
 python -m venv .venv
 .venv/Scripts/activate          # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 python manage.py migrate
 python manage.py runserver
 ```
@@ -37,6 +36,12 @@ npm run dev
 ```
 
 Open http://localhost:5173 and you land on the sign-in screen.
+
+**`backend/.env`** is not in the repository, and neither is a template for it —
+ask the team for the current one. Everything in it has a working development
+default except `CREDENTIAL_ENCRYPTION_KEY` and `ANTHROPIC_API_KEY`; the full list
+of variables, with their defaults, is the `env(...)` block at the top of
+`backend/config/settings.py`.
 
 **Worker** — needed for test case generation (screen 05)
 
