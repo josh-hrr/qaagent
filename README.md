@@ -82,7 +82,7 @@ a trailing `=` is a soft line break — so join the pieces before opening it. Po
 | 04 | Pick a ticket | **built** — `/tickets` |
 | 05 | Generation run | **built** — `/runs/:id` |
 | 06 | Review workspace | **built** — `/runs/:id/review` |
-| 07 | Export CSV / Markdown | designed |
+| 07 | Export CSV / Markdown | **built** — the Export dialog on a run |
 
 Build order follows the numbering.
 
@@ -274,6 +274,9 @@ scope, read the changed files, draft test cases, cross-check.
   bound marks the run *stopped early* rather than implying full coverage.
 - **Cancel** is a flag the worker checks at stage and round boundaries, so a
   run stops cleanly rather than mid-write.
+- **Which pull requests**: every link on the ticket, minus any a person
+  unticked on the ticket screen before pressing Generate — a comment can carry
+  another ticket's PR, and parsing cannot tell the difference.
 - **Which code**: linked pull requests first, then a **branch named after the
   ticket** (`TES-8`, `josue/tes-8-login`; not `TES-80`) diffed against the
   repository's default branch. The repository's diff-scope rule sets the order.
@@ -296,6 +299,29 @@ scope, read the changed files, draft test cases, cross-check.
 - **Drift** is checked when the page opens and on request, never on a timer:
   the live ticket's content hash against the run's snapshot (with what changed),
   and commits pushed to the PR or branch since the run read it.
+
+## Exporting (screen 07)
+
+The **Export** button on a reviewed run. One dialog, previewing the real file:
+
+- **`.csv`** with a UTF-8 BOM and CRLF, so Excel opens it without a wizard and
+  TestRail/Xray import it. **`.md`** as one pipe table or a section per case,
+  for a pull request or a wiki. **`.zip`** for both, from the same rows.
+- **14 columns** to choose from; `testcase#` and `test_title` are required.
+- **Which cases**: all, the ones ticked in the table, or approved only.
+  **Rejected cases are never exported** — somebody deliberately threw them out.
+- **Toggles** for numbered steps in one cell, a blank `actual_result` column,
+  and a run summary header (ticket, source, commit, coverage).
+- The preview is rendered by the same server code as the download, so what is
+  on screen is the file — including its exact size.
+- **Choices are remembered per user** on download, and **every download is
+  recorded** on the run: who, when, which cases, what shape.
+
+### Spend
+
+`RUN_COST_CAP_USD` bounds one run. `WORKSPACE_MONTHLY_CAP_USD` (default $50)
+bounds the calendar month across everybody: at the cap, starting a run answers
+402 and the left rail shows the total climbing towards it.
 
 ### Choosing a model
 
