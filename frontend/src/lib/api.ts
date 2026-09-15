@@ -396,9 +396,14 @@ export type Spend = {
 }
 
 export const runsApi = {
-  /** Only the ticket id is sent; the server re-reads the ticket from Linear. */
-  start: (ticketId: string, identifier: string) =>
-    api.post<{ run: RunSummary; existing: boolean }>('/runs/start/', { ticketId, identifier }),
+  /** Only the ticket id is sent; the server re-reads the ticket from Linear.
+   *  `excludePullRequests` carries links the user unticked on the ticket screen. */
+  start: (ticketId: string, identifier: string, excludePullRequests: string[] = []) =>
+    api.post<{ run: RunSummary; existing: boolean }>('/runs/start/', {
+      ticketId,
+      identifier,
+      excludePullRequests,
+    }),
   get: (runId: number | string) => api.get<{ run: RunDetail }>(`/runs/${runId}/`),
   list: () => api.get<{ runs: RunSummary[]; activeCount: number; spend: Spend }>('/runs/'),
   cancel: (runId: number | string) => api.post<{ run: RunSummary }>(`/runs/${runId}/cancel/`),

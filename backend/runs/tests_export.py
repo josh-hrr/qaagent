@@ -6,7 +6,7 @@ import io
 import zipfile
 from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from accounts.models import User
 
-from . import exporting
+from . import exporting, pipeline
 from .models import ExportRecord, Run, RunStatus, TestCaseStatus
 from .models import TestCase as GeneratedCase
 
@@ -276,3 +276,61 @@ class MonthlySpendTests(TestCase):
         old = self.run_costing("5.00")
         Run.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=45))
         self.assertEqual(self.start().status_code, 201)
+
+
+class UntickedPullRequestTests(TestCase):
+    """A comment can carry another ticket's PR link; parsing cannot tell."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("dev@example.com")
+        self.client.force_login(self.user)
+
+    def test_start_records_what_was_unticked(self):
+        with patch("runs.views.execute_run"), self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("runs:start"),
+                {
+                    "ticketId": "lin_1",
+                    "identifier": "TES-8",
+                    "excludePullRequests": ["https://dev.azure.com/acme/Core/_git/core-api/pullrequest/9"],
+                },
+                "application/json",
+            )
+        self.assertEqual(response.status_code, 201)
+        run = Run.objects.get()
+        self.assertEqual(len(run.excluded_pull_requests), 1)
+
+    def test_an_unticked_pull_request_is_left_out_of_the_scope(self):
+        from connections.models import Connection, LinearTeam, Provider, Repository
+
+        linear = Connection.objects.create(provider=Provider.LINEAR)
+        linear.set_credential("lin_api_x")
+        linear.save()
+        LinearTeam.objects.create(connection=linear, linear_id="t", key="TES", name="T", selected=True)
+        azure = Connection.objects.create(provider=Provider.AZURE_DEVOPS)
+        azure.set_credential("pat")
+        azure.save()
+        Repository.objects.create(connection=azure, external_id="r", name="core-api", selected=True)
+
+        from .tests import INFO, issue_with_pr
+
+        issue = issue_with_pr()
+        run = Run.objects.create(
+            ticket_linear_id="lin_1",
+            ticket_identifier="TES-8",
+            excluded_pull_requests=[issue.pull_requests[0].url],
+        )
+        reader = MagicMock()
+        reader.repository = "core-api"
+        reader.pull_request.return_value = INFO
+        reader.branches.return_value = [("main", "m" * 40)]
+
+        with patch("runs.pipeline.fetch_issue", return_value=issue), patch(
+            "runs.pipeline.CodeReader", return_value=reader
+        ):
+            pipeline.execute(run.pk)
+
+        run.refresh_from_db()
+        reader.pull_request.assert_not_called()
+        self.assertEqual(run.error_code, "no_usable_pull_request")
+        self.assertEqual(run.skipped_pull_requests[0]["reason"], "unticked before the run")

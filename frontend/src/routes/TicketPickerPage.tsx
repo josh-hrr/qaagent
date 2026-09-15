@@ -6,6 +6,7 @@ import { Button } from '../components/Button'
 import {
   AlertIcon,
   BranchIcon,
+  CheckIcon,
   ExternalLinkIcon,
   PlayIcon,
   RefreshIcon,
@@ -319,6 +320,9 @@ function TicketDetail({ ticket }: { ticket: Ticket }) {
   const navigate = useNavigate()
   const [starting, setStarting] = useState(false)
   const [startError, setStartError] = useState<string | null>(null)
+  // Links parsed out of comments can belong to another ticket, and nothing in
+  // the text says so. Unticking one keeps it out of this run.
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
 
   async function generate() {
     if (blocked || starting) return
@@ -327,7 +331,7 @@ function TicketDetail({ ticket }: { ticket: Ticket }) {
     try {
       // Only the id goes to the server — it re-reads the ticket itself, so the
       // run is built from Linear's current content, not this page's copy.
-      const { run } = await runsApi.start(ticket.id, ticket.identifier)
+      const { run } = await runsApi.start(ticket.id, ticket.identifier, [...excluded])
       navigate(`/runs/${run.id}`)
     } catch (err) {
       setStartError(err instanceof ApiError ? err.message : 'Could not start the run.')
@@ -416,28 +420,60 @@ function TicketDetail({ ticket }: { ticket: Ticket }) {
               Pull requests
               <span className="ml-2 font-mono text-fg-ghost normal-case">{ticket.pullRequests.length}</span>
             </p>
-            <ul className="mb-4.5 flex flex-col gap-1.5">
-              {ticket.pullRequests.map((pr) => (
-                <li key={pr.url}>
-                  <a
-                    href={pr.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-2.5 rounded-md border border-edge bg-ink-700 px-2.5 py-2 no-underline hover:border-edge-strong"
+            <ul className="mb-2 flex flex-col gap-1.5">
+              {ticket.pullRequests.map((pr) => {
+                const on = !excluded.has(pr.url)
+                return (
+                  <li
+                    key={pr.url}
+                    className={`flex items-center gap-2.5 rounded-md border bg-ink-700 px-2.5 py-2 ${
+                      on ? 'border-edge' : 'border-edge opacity-55'
+                    }`}
                   >
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={on}
+                      aria-label={`Include ${pr.number ? `#${pr.number}` : 'this pull request'} in the run`}
+                      onClick={() =>
+                        setExcluded((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(pr.url)) next.delete(pr.url)
+                          else next.add(pr.url)
+                          return next
+                        })
+                      }
+                      className={`flex size-3.75 shrink-0 cursor-pointer items-center justify-center rounded border ${
+                        on ? 'border-signal bg-signal' : 'border-fg-ghost hover:border-fg-faint'
+                      }`}
+                    >
+                      {on && <CheckIcon size={9} className="text-ink-900" />}
+                    </button>
                     <BranchIcon size={12} className="shrink-0 text-fg-faint" />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-fg-muted">
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`min-w-0 flex-1 truncate font-mono text-[11.5px] no-underline hover:text-fg ${
+                        on ? 'text-fg-muted' : 'text-fg-faint line-through'
+                      }`}
+                    >
                       {pr.number ? `#${pr.number}` : 'PR'} · {pr.repository || 'unknown repo'}
-                    </span>
+                    </a>
                     {!pr.inConnectedRepository && (
                       <span className="shrink-0 font-mono text-[10px] text-warn">repo not connected</span>
                     )}
                     <span className="shrink-0 font-mono text-[10px] text-fg-faint">{pr.source}</span>
                     <ExternalLinkIcon size={11} className="shrink-0 text-fg-faint" />
-                  </a>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
+            <p className="mb-4.5 text-[11px] text-fg-faint text-pretty">
+              {excluded.size > 0
+                ? `${excluded.size} left out of this run.`
+                : 'Untick one a comment picked up from another ticket.'}
+            </p>
           </>
         )}
 

@@ -61,6 +61,9 @@ class Run(models.Model):
     skipped_pull_requests = models.JSONField(default=list, blank=True)
     # Branches used when no pull request was linked (branch matching).
     branches = models.JSONField(default=list, blank=True)
+    # PR links a person unticked before generating. A comment can mention
+    # another ticket's pull request, and parsing cannot tell the difference.
+    excluded_pull_requests = models.JSONField(default=list, blank=True)
 
     # --- model usage and cost -------------------------------------------
     model = models.CharField(max_length=60, blank=True)

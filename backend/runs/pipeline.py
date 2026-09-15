@@ -110,7 +110,12 @@ def _fetch_ticket(run: Run):
 def _pull_request_scopes(run: Run, issue, source: Connection, connected: set[str]):
     """Linked pull requests that can be read, plus the ones skipped and why."""
     used, skipped, scoped = [], [], []
+    excluded = {url for url in (run.excluded_pull_requests or [])}
     for ref in issue.pull_requests:
+        if ref.url in excluded:
+            skipped.append({"url": ref.url, "reason": "unticked before the run"})
+            _event(run, Stage.RESOLVE_SCOPE, f"skipped {ref.url}: unticked before the run")
+            continue
         if ref.provider != "azure_devops" or not ref.number:
             skipped.append({"url": ref.url, "reason": "not an Azure DevOps pull request"})
             continue

@@ -27,6 +27,11 @@ class StartRunSerializer(serializers.Serializer):
     # could be stale or tampered with, and the snapshot must reflect Linear.
     ticketId = serializers.CharField(max_length=64)
     identifier = serializers.CharField(max_length=40, required=False, allow_blank=True)
+    # Pull request links the user unticked on the ticket screen. URLs, because
+    # that is the only identifier the picker and the run agree on.
+    excludePullRequests = serializers.ListField(
+        child=serializers.CharField(max_length=500), required=False, allow_empty=True, max_length=50
+    )
 
 
 def _criteria_coverage(run: Run) -> dict:
@@ -180,6 +185,7 @@ def start_run(request: Request) -> Response:
         run = Run.objects.create(
             ticket_linear_id=ticket_id,
             ticket_identifier=serializer.validated_data.get("identifier", "")[:40],
+            excluded_pull_requests=serializer.validated_data.get("excludePullRequests", []),
             created_by=request.user,
         )
         # Enqueue only once the row is committed, or a fast worker could look
