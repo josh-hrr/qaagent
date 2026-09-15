@@ -199,7 +199,7 @@ export type Repository = {
   webUrl: string
   sizeBytes: number | null
   selected: boolean
-  /** Empty until the run pipeline has actually cloned it. */
+  /** Empty until a run has read this repository. */
   lastIndexedCommit: string
   isIndexed: boolean
 }

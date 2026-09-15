@@ -7,7 +7,7 @@ const PILLARS = [
   },
   {
     n: '02',
-    text: 'Code scope from Azure DevOps or GitHub, cloned per run.',
+    text: 'Code scope from Azure DevOps or GitHub, read per run.',
   },
   {
     n: '03',
@@ -62,9 +62,9 @@ export function BrandPanel() {
           Test cases that read the ticket <span className="text-signal">and</span> the diff.
         </h1>
         <p className="mt-5 max-w-[520px] text-[15px] text-fg-dim text-pretty">
-          Point it at a Linear ticket and the branch that implements it. It clones the repo, reads
-          what actually changed, and writes the manual test cases — flagging code it doesn&rsquo;t
-          trust and requirements it can&rsquo;t pin down.
+          Point it at a Linear ticket and the branch that implements it. It reads what actually
+          changed, and writes the manual test cases — flagging code it doesn&rsquo;t trust and
+          requirements it can&rsquo;t pin down.
         </p>
       </div>
 

@@ -277,8 +277,8 @@ function SecurityNote() {
     <div className="mt-6 flex gap-2.5 rounded-[7px] border border-edge bg-ink-700 px-3 py-3">
       <LockIcon size={14} className="mt-0.5 shrink-0 text-fg-faint" />
       <p className="text-[12px] text-fg-dimmer text-pretty">
-        Repository and ticket credentials are stored per workspace, never per user. Cloned source is
-        deleted when the run finishes.
+        Repository and ticket credentials are stored per workspace, never per user. Code is read
+        over the API for one run and never stored.
       </p>
     </div>
   )

@@ -183,7 +183,7 @@ whether their teams open pull requests before asking for tests.
 
 **Nothing is cloned — at connect time or ever.** Runs read code through the
 Azure DevOps API, file by file (see screen 05). `last_indexed_commit` stays
-empty, so the UI says "not cloned yet" rather than claiming an index that does
+empty, so the UI says "not read yet" rather than claiming an index that does
 not exist.
 
 **How much code a run reads** is decided by the agent, not by a fixed rule.

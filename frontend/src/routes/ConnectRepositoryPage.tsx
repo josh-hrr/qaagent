@@ -58,10 +58,10 @@ const DIFF_SCOPES: {
 ];
 
 /** Read-only. One line each — the detail lives in the README. */
-const CLONE_FACTS = [
-  "Temporary copy of the repo, retrieves recent history only.",
+const RUN_FACTS = [
+  "Reads the changed files over the Azure DevOps API. The repo is never copied.",
   "Reads the files the ticket changed, plus what might be affected by them.",
-  "Isolated sandbox. The copy is deleted when the run finishes.",
+  "Read-only, pinned to one commit. Code is not stored when the run finishes.",
 ];
 
 type AzureView =
@@ -292,7 +292,7 @@ export function ConnectRepositoryPage() {
         Connect your source code
       </h1>
       <p className="mb-6 max-w-[680px] text-[14px] text-fg-dimmer text-pretty">
-        Where the code comes from. Nothing is cloned until a run starts.
+        Where the code comes from. A run reads it over the API, never by cloning.
       </p>
 
       {/* --- provider --- */}
@@ -544,7 +544,7 @@ export function ConnectRepositoryPage() {
                         >
                           {repo.isIndexed
                             ? repo.lastIndexedCommit.slice(0, 7)
-                            : "NOT CLONED YET"}
+                            : "NOT READ YET"}
                         </span>
                       </button>
                     </li>
@@ -552,8 +552,8 @@ export function ConnectRepositoryPage() {
                 })}
               </ul>
               <p className="mt-3 text-[11.5px] text-fg-faint">
-                Nothing is cloned now — the first run for a ticket clones what
-                it needs into a throwaway container.
+                Nothing is read now — a run fetches the files it needs from the
+                API when it starts.
               </p>
             </section>
           )}
@@ -677,13 +677,13 @@ export function ConnectRepositoryPage() {
             </div>
           )}
 
-          {/* --- clone container --- */}
+          {/* --- what a run reads --- */}
           <section className="rounded-[10px] border border-edge bg-ink-800 px-5 py-5">
             <p className="label-micro mb-3">What happens on each run</p>
             {/* Plain lines, not bordered cards: every card on this screen is
                 clickable, and this is read-only. */}
             <ul className="flex flex-col gap-2">
-              {CLONE_FACTS.map((fact) => (
+              {RUN_FACTS.map((fact) => (
                 <li key={fact} className="flex items-center gap-2.5">
                   <span className="size-1 shrink-0 rounded-full bg-fg-ghost" />
                   <span className="text-[13px] text-fg-dim">{fact}</span>
