@@ -38,6 +38,9 @@ env = environ.Env(
     LLM_MODEL=(str, "claude-opus-5"),
     LLM_EFFORT=(str, "high"),
     RUN_COST_CAP_USD=(float, 1.0),
+    # Ceiling for the whole workspace in a calendar month. The per-run cap
+    # bounds one mistake; this one bounds a bad week.
+    WORKSPACE_MONTHLY_CAP_USD=(float, 50.0),
     RUN_MAX_FILES=(int, 40),
     RUN_MAX_ROUNDS=(int, 12),
     # SSO — a provider counts as configured only when both id and secret are set
@@ -239,6 +242,9 @@ LLM_EFFORT = env("LLM_EFFORT")
 # Hard ceiling per run. When reached the agent stops reading and submits what
 # it has, and the run is marked as stopped early.
 RUN_COST_CAP_USD = env("RUN_COST_CAP_USD")
+# Checked before a run is queued, never mid-run: stopping halfway would spend
+# the money and throw away the result.
+WORKSPACE_MONTHLY_CAP_USD = env("WORKSPACE_MONTHLY_CAP_USD")
 RUN_MAX_FILES = env("RUN_MAX_FILES")
 RUN_MAX_ROUNDS = env("RUN_MAX_ROUNDS")
 

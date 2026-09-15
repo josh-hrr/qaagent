@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import logging
 import re
+from decimal import Decimal
 
+from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -42,6 +46,26 @@ def _criteria_coverage(run: Run) -> dict:
         for match in re.findall(r"\bAC-\d+\b", str(trace), re.I)
     }
     return {"criteriaTotal": total, "criteriaCovered": len(keys & traced)}
+
+
+def monthly_spend() -> dict:
+    """What the workspace has spent this calendar month, against its cap.
+
+    Counted from the runs themselves rather than a running total, so it stays
+    right after a run is deleted and cannot drift.
+    """
+    now = timezone.now()
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month = Run.objects.filter(created_at__gte=start)
+    spent = month.aggregate(total=Sum("cost_usd"))["total"] or Decimal("0")
+    cap = Decimal(str(settings.WORKSPACE_MONTHLY_CAP_USD))
+    return {
+        "spentUsd": str(spent.quantize(Decimal("0.0001"))),
+        "capUsd": str(cap),
+        "runCount": month.count(),
+        "model": settings.LLM_MODEL,
+        "capReached": cap > 0 and spent >= cap,
+    }
 
 
 def _serialize(run: Run, *, detail: bool) -> dict:
@@ -127,6 +151,20 @@ def start_run(request: Request) -> Response:
     serializer.is_valid(raise_exception=True)
     ticket_id = serializer.validated_data["ticketId"]
 
+    spend = monthly_spend()
+    if spend["capReached"]:
+        return Response(
+            {
+                "detail": (
+                    f"This workspace has spent ${spend['spentUsd']} of its ${spend['capUsd']} "
+                    "cap for the month. Raise WORKSPACE_MONTHLY_CAP_USD to run more."
+                ),
+                "code": "monthly_cap_reached",
+                "spend": spend,
+            },
+            status=status.HTTP_402_PAYMENT_REQUIRED,
+        )
+
     with transaction.atomic():
         # One active run per ticket. A double-click or a second tab should land
         # on the run already in progress, not pay for two identical runs.
@@ -189,5 +227,6 @@ def list_runs(request: Request) -> Response:
             "runs": [_serialize(run, detail=False) for run in runs[:50]],
             # For the "N live" badge in the navigation rail.
             "activeCount": Run.objects.exclude(status__in=TERMINAL_STATUSES).count(),
+            "spend": monthly_spend(),
         }
     )

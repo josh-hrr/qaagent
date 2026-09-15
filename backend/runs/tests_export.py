@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import io
 import zipfile
+from datetime import timedelta
+from decimal import Decimal
+from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import User
 
@@ -226,3 +230,49 @@ class ExportApiTests(TestCase):
         self.assertEqual(len(body["exports"]), 1)
         self.assertEqual(body["exports"][0]["exportedBy"], "dev@example.com")
         self.assertEqual(body["exports"][0]["caseCount"], 2)
+
+
+class MonthlySpendTests(TestCase):
+    """The per-run cap bounds one mistake; this one bounds a bad week."""
+
+    def setUp(self):
+        self.user = User.objects.create_user("dev@example.com")
+        self.client.force_login(self.user)
+
+    def run_costing(self, amount: str, **overrides):
+        return Run.objects.create(
+            ticket_linear_id="lin_1", status=RunStatus.SUCCEEDED, cost_usd=Decimal(amount), **overrides
+        )
+
+    def start(self):
+        with patch("runs.views.execute_run"), self.captureOnCommitCallbacks(execute=True):
+            return self.client.post(
+                reverse("runs:start"), {"ticketId": "lin_9", "identifier": "TES-9"}, "application/json"
+            )
+
+    @override_settings(WORKSPACE_MONTHLY_CAP_USD=50.0)
+    def test_list_reports_what_the_month_has_cost(self):
+        self.run_costing("1.25")
+        self.run_costing("0.75")
+        spend = self.client.get(reverse("runs:list")).json()["spend"]
+        self.assertEqual(spend["spentUsd"], "2.0000")
+        self.assertEqual((spend["capUsd"], spend["runCount"], spend["capReached"]), ("50.0", 2, False))
+
+    @override_settings(WORKSPACE_MONTHLY_CAP_USD=2.0)
+    def test_a_run_is_refused_once_the_cap_is_reached(self):
+        self.run_costing("2.00")
+        response = self.start()
+        self.assertEqual(response.status_code, 402)
+        self.assertEqual(response.json()["code"], "monthly_cap_reached")
+        self.assertFalse(Run.objects.filter(ticket_linear_id="lin_9").exists())
+
+    @override_settings(WORKSPACE_MONTHLY_CAP_USD=2.0)
+    def test_under_the_cap_still_runs(self):
+        self.run_costing("1.99")
+        self.assertEqual(self.start().status_code, 201)
+
+    @override_settings(WORKSPACE_MONTHLY_CAP_USD=1.0)
+    def test_last_months_spending_does_not_count(self):
+        old = self.run_costing("5.00")
+        Run.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=45))
+        self.assertEqual(self.start().status_code, 201)

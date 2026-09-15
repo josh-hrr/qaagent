@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 import { useAuth } from '../auth/AuthContext'
-import { runsApi } from '../lib/api'
+import { runsApi, type Spend } from '../lib/api'
 import { Button } from './Button'
 import { BrandMark, BranchIcon, GearIcon, PlayIcon, PlugIcon, TagIcon } from './icons'
 
@@ -44,7 +44,7 @@ function navItems(runs: RunsState): NavItem[] {
   ]
 }
 
-type RunsState = { latestId: number | null; activeCount: number }
+type RunsState = { latestId: number | null; activeCount: number; spend: Spend | null }
 
 /** Chrome for the signed-in product screens (04 onward). */
 export function AppShell({
@@ -69,7 +69,7 @@ export function AppShell({
 }) {
   const { user, signOut } = useAuth()
   const { pathname } = useLocation()
-  const [runs, setRuns] = useState<RunsState>({ latestId: null, activeCount: 0 })
+  const [runs, setRuns] = useState<RunsState>({ latestId: null, activeCount: 0, spend: null })
 
   // Once per screen, from our own API — the badge is a hint, not a live feed,
   // so it does not poll. The run page itself polls its own run.
@@ -77,8 +77,8 @@ export function AppShell({
     let cancelled = false
     runsApi
       .list()
-      .then(({ runs: list, activeCount }) => {
-        if (!cancelled) setRuns({ latestId: list[0]?.id ?? null, activeCount })
+      .then(({ runs: list, activeCount, spend }) => {
+        if (!cancelled) setRuns({ latestId: list[0]?.id ?? null, activeCount, spend })
       })
       .catch(() => undefined)
     return () => {
@@ -134,6 +134,8 @@ export function AppShell({
 
         <div className="flex-1" />
 
+        {runs.spend && <SpendPanel spend={runs.spend} />}
+
         <div className="flex items-center gap-2.5 border-t border-edge px-4 py-3">
           {user && (
             <>
@@ -168,6 +170,36 @@ export function AppShell({
         </div>
         {aside}
       </div>
+    </div>
+  )
+}
+
+/** What the workspace has spent this month. A cap that is invisible until it
+ *  bites is a cap that surprises somebody mid-sprint. */
+function SpendPanel({ spend }: { spend: Spend }) {
+  const spent = Number(spend.spentUsd)
+  const cap = Number(spend.capUsd)
+  const fraction = cap > 0 ? Math.min(1, spent / cap) : 0
+  const bar = spend.capReached ? 'bg-danger' : fraction > 0.8 ? 'bg-warn' : 'bg-signal'
+
+  return (
+    <div className="mx-3.5 mb-3 rounded-lg border border-edge bg-ink-800 p-3">
+      <p className="label-micro mb-2">Spend this month</p>
+      <p className="mb-2.25 flex items-baseline gap-1.5">
+        <span className="font-display text-[19px] font-semibold text-fg">${spent.toFixed(2)}</span>
+        <span className="font-mono text-[10px] text-fg-faint">/ ${cap.toFixed(0)} cap</span>
+      </p>
+      <div className="h-0.75 overflow-hidden rounded-full bg-edge">
+        <div className={`h-0.75 ${bar}`} style={{ width: `${Math.round(fraction * 100)}%` }} />
+      </div>
+      <p className="mt-2 font-mono text-[10px] text-fg-faint">
+        {spend.model} · {spend.runCount} run{spend.runCount === 1 ? '' : 's'}
+      </p>
+      {spend.capReached && (
+        <p className="mt-1.5 text-[11px] text-danger text-pretty">
+          Cap reached — new runs are refused until next month, or until the cap is raised.
+        </p>
+      )}
     </div>
   )
 }

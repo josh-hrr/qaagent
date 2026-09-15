@@ -386,12 +386,21 @@ export type RunDetail = RunSummary & {
   }[]
 }
 
+/** What the workspace has spent this calendar month, against its cap. */
+export type Spend = {
+  spentUsd: string
+  capUsd: string
+  runCount: number
+  model: string
+  capReached: boolean
+}
+
 export const runsApi = {
   /** Only the ticket id is sent; the server re-reads the ticket from Linear. */
   start: (ticketId: string, identifier: string) =>
     api.post<{ run: RunSummary; existing: boolean }>('/runs/start/', { ticketId, identifier }),
   get: (runId: number | string) => api.get<{ run: RunDetail }>(`/runs/${runId}/`),
-  list: () => api.get<{ runs: RunSummary[]; activeCount: number }>('/runs/'),
+  list: () => api.get<{ runs: RunSummary[]; activeCount: number; spend: Spend }>('/runs/'),
   cancel: (runId: number | string) => api.post<{ run: RunSummary }>(`/runs/${runId}/cancel/`),
 }
 
