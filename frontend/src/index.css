@@ -110,6 +110,16 @@
   }
 }
 
+@layer base {
+  /* A native dropdown paints its options with the OS palette, so a coloured
+     <select> (the priority pill, the status pill) opens to unreadable white
+     text. Set the popup colours once, everywhere. */
+  select option {
+    background-color: var(--color-ink-800);
+    color: var(--color-fg-muted);
+  }
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;

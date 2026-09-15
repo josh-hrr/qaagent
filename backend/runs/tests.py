@@ -751,6 +751,15 @@ class ReviewApiTests(TestCase):
         azure.set_credential("pat"); azure.save()
         Repository.objects.create(connection=azure, external_id="r", name="core-api", project_name="Core", selected=True)
 
+    def test_a_run_from_before_the_refs_were_stored_still_shows_the_target_branch(self):
+        self.connect()
+        Repository.objects.filter(name="core-api").update(default_branch="refs/heads/main")
+        Run.objects.filter(pk=self.run.pk).update(
+            pull_requests=[{"repository": "core-api", "number": 7, "head_commit": "h" * 40}]
+        )
+        scope = self.client.get(self.url("review")).json()["run"]["scope"]
+        self.assertEqual((scope["sourceRef"], scope["targetRef"]), ("", "main"))
+
     def test_drift_reports_ticket_and_commit_changes(self):
         self.connect()
         live = issue_with_pr(title="t", description="d\n## Acceptance criteria\n- AC-1: Replay rejected\n- AC-2: New one\n")

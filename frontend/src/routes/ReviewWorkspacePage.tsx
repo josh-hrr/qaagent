@@ -429,8 +429,15 @@ export function ReviewWorkspacePage() {
                 <BranchIcon size={14} className="shrink-0 text-fg-faint" />
                 <span className="truncate text-fg-muted">{run.scope.sourceRef || `PR #${run.scope.number}`}</span>
               </span>
-              <span className="text-fg-ghost">→</span>
-              <span className="text-fg-faint">{run.scope.targetRef}</span>
+              {run.scope.targetRef && (
+                <>
+                  <span className="text-fg-ghost">→</span>
+                  <span className="text-fg-faint">{run.scope.targetRef}</span>
+                </>
+              )}
+              {run.scope.kind === "pull_request" && run.scope.number !== null && run.scope.sourceRef && (
+                <span className="text-fg-faint">PR #{run.scope.number}</span>
+              )}
               <Divider />
               <span className="text-fg-faint">azure-devops · {run.scope.repository}</span>
               <Divider />
@@ -953,8 +960,13 @@ function FindingCard({
             Add as test case
           </button>
         )}
-        <button type="button" onClick={onCopy} className={action} title="Copies a comment to paste into Linear">
-          Copy comment for {ticket}
+        <button
+          type="button"
+          onClick={onCopy}
+          title={`Copies a comment about this finding to paste into ${ticket}`}
+          className="flex h-6.5 cursor-pointer items-center rounded-[5px] bg-signal px-2.5 text-[11.5px] font-semibold text-ink-900 hover:bg-signal-bright"
+        >
+          Copy as Linear comment
         </button>
         {editable && (
           <button
@@ -1290,11 +1302,11 @@ function CaseDetail({
               const body = (
                 <>
                   <span className="w-12 shrink-0 font-mono text-[10px] text-fg-faint">{t.kind === "criterion" ? "ticket" : "code"}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate font-mono text-[11.5px] ${url ? "text-info" : "text-fg-dim"}`}>
-                      {t.kind === "criterion" ? `${ticket} · ${t.label}` : t.label}
-                    </span>
-                    {t.text && <span className="block truncate text-[11px] text-fg-faint">{t.text}</span>}
+                  <span
+                    className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-info"
+                    title={t.text || undefined}
+                  >
+                    {t.kind === "criterion" ? `${ticket} · ${t.label}` : t.label}
                   </span>
                   {url && <ExternalLinkIcon size={12} className="shrink-0 text-fg-faint" />}
                 </>

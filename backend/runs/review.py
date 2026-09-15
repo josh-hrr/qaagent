@@ -65,15 +65,23 @@ def _not_editable(run: Run) -> Response | None:
     return None
 
 
+def _default_branch(repository: str) -> str:
+    repo = Repository.objects.filter(name__iexact=repository).first()
+    return (repo.default_branch.removeprefix("refs/heads/") if repo and repo.default_branch else "")
+
+
 def _scope(run: Run) -> dict | None:
     """The code the run read: its first pull request, or else its branch."""
     if run.pull_requests:
         pr = run.pull_requests[0]
+        repository = pr.get("repository", "")
         return {
             "kind": "pull_request",
-            "repository": pr.get("repository", ""),
+            "repository": repository,
             "sourceRef": pr.get("source_ref", ""),
-            "targetRef": pr.get("target_ref", ""),
+            # Runs from before the refs were recorded still know where a PR
+            # lands: the repository's default branch.
+            "targetRef": pr.get("target_ref") or _default_branch(repository),
             "headCommit": pr.get("head_commit", ""),
             "baseCommit": pr.get("base_commit", ""),
             "number": pr.get("number"),
