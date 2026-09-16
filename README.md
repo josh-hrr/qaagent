@@ -90,6 +90,33 @@ a trailing `=` is a soft line break — so join the pieces before opening it. Po
 
 Build order follows the numbering.
 
+## Keeping the evidence
+
+The run history is the product's own track record: what went through it, what a
+reviewer kept, and what it cost. Two commands make that portable.
+
+```bash
+python manage.py qa_metrics                        # the report
+python manage.py qa_metrics --since 2026-01-01 --csv metrics.csv
+python manage.py backup_db --to "D:/OneDrive/qa-agent-backups"
+```
+
+`qa_metrics` counts only rows the app already writes — runs, review outcomes,
+findings kept or dismissed, exports, spend — plus an eight-week trend. Numbers
+worth quoting: **approval rate** (cases a reviewer kept as written), **edit
+rate**, **rejection rate** (the miss rate), **criteria coverage**, and **cost
+per kept test case**.
+
+It deliberately does not estimate time saved. That needs a per-case baseline
+only the team can give, and an invented one is the first thing a sceptical
+reader will pull at. Multiply kept cases by your own number, and say which
+number you used.
+
+`backup_db` uses SQLite's backup API, so it is safe while the server and worker
+are running. Point `--to` at a synced folder — on one laptop, the laptop is the
+only copy. The file holds ticket titles and encrypted credentials: treat it as
+company data.
+
 ## Settings (`/settings`)
 
 Written for a tester, not an operator: it reports the running configuration in

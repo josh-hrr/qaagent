@@ -29,3 +29,7 @@ backend/tmp/
 # Design canvas and internal notes — kept local, not shared with the repo
 design/
 docs/
+
+# Database copies written by manage.py backup_db
+backups/
+*.sqlite3-backup
