@@ -67,8 +67,13 @@ class ExportRenderingTests(TestCase):
         self.assertIn(b"\r\n", payload)
         self.assertIn("text/csv", content_type)
 
-    def test_steps_are_numbered_in_one_cell_by_default(self):
-        self.assertIn("1. Sign in 2. Replay RT-1", self.csv_text())
+    def test_steps_are_numbered_one_per_line_in_one_cell(self):
+        # The break lives inside the quoted field; the row still ends CRLF, so
+        # Excel stacks the steps instead of running them together.
+        text = self.csv_text()
+        self.assertIn('"1. Sign in\n2. Replay RT-1"', text)
+        self.assertNotIn("1. Sign in 2. Replay RT-1", text)
+        self.assertEqual(len(text.split("\r\n")), 3)  # header, one row, trailing
 
     def test_steps_can_be_split_on_semicolons_instead(self):
         text = self.csv_text(options={"numbered_steps": False})
@@ -84,14 +89,16 @@ class ExportRenderingTests(TestCase):
         self.assertIn("core-api · PR #7 · head 9f2c1ab", text)
         self.assertIn("1 cases · 1/2 acceptance criteria covered", text)
 
-    def test_markdown_table_escapes_pipes_and_newlines(self):
+    def test_markdown_table_escapes_pipes_and_keeps_each_row_on_one_line(self):
         GeneratedCase.objects.filter(pk=self.case.pk).update(
             title="a | b", expected_result="line one\nline two"
         )
         settings = settings_for(file_format="md")
         text = exporting.render_markdown_table(self.run, exporting.select_cases(self.run, settings), settings)
         self.assertIn("a \\| b", text)
-        self.assertIn("line one line two", text)
+        # A raw newline would end the row; <br> is a break inside the cell.
+        self.assertIn("line one<br>line two", text)
+        self.assertIn("1. Sign in<br>2. Replay RT-1", text)
         self.assertEqual(len(text.strip().splitlines()), 3)  # header, rule, one row
 
     def test_markdown_sections_read_as_a_document(self):

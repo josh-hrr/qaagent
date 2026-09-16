@@ -47,7 +47,7 @@ const OPTIONS: {
   {
     key: "numberedSteps",
     label: "Keep steps numbered in one cell",
-    note: "Off joins them with semicolons instead.",
+    note: "One numbered step per line. Off joins them with semicolons on a single line.",
     // The section layout writes steps as a real Markdown list; there is no
     // single cell for this to change.
     applies: (settings) => !(settings.fileFormat === "md" && settings.layout === "sections"),

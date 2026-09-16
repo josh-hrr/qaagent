@@ -311,7 +311,10 @@ The **Export** button on a reviewed run. One dialog, previewing the real file:
 - **14 columns** to choose from; `testcase#` and `test_title` are required.
 - **Which cases**: all, the ones ticked in the table, or approved only.
   **Rejected cases are never exported** — somebody deliberately threw them out.
-- **Toggles** for numbered steps in one cell, a blank `actual_result` column,
+- **Toggles** for numbered steps in one cell — one step per line, using a bare
+  `
+` inside the quoted field so Excel and Sheets stack them — a blank
+  `actual_result` column,
   and a run summary header (ticket, source, commit, coverage). The numbering
   toggle is hidden for the section layout, where steps are a real list and it
   would change nothing.

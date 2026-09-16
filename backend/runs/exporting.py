@@ -118,7 +118,10 @@ def _steps(case: TestCase, settings: ExportSettings) -> str:
     if not steps:
         return ""
     if settings.option("numbered_steps"):
-        return " ".join(f"{i}. {s}" for i, s in enumerate(steps, start=1))
+        # One step per line inside the single cell. A bare "\n" (never CRLF) is
+        # what Excel, Sheets, TestRail and Xray read as a line break inside a
+        # quoted field — CRLF there is ambiguous with the row terminator.
+        return "\n".join(f"{i}. {s}" for i, s in enumerate(steps, start=1))
     return "; ".join(steps)
 
 
@@ -223,8 +226,10 @@ def render_csv(run: Run, cases: list[TestCase], settings: ExportSettings) -> str
 
 
 def _md_cell(text: str) -> str:
-    # A pipe would end the cell and a newline would end the row.
-    cell = str(text).replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").strip()
+    # A pipe would end the cell and a newline would end the row. <br> is the one
+    # line break a pipe table understands, and GitHub and Azure DevOps both
+    # render it — so numbered steps stay on separate lines here too.
+    cell = str(text).replace("|", "\\|").replace("\r\n", "\n").replace("\n", "<br>").strip()
     return cell or " "
 
 
