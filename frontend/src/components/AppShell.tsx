@@ -26,19 +26,19 @@ function navItems(runs: RunsState): NavItem[] {
       key: 'runs',
       label: 'Runs',
       icon: <PlayIcon size={16} />,
-      // No run list screen yet, so Runs opens the most recent run.
-      to: runs.latestId ? `/runs/${runs.latestId}` : undefined,
-      activePrefix: '/runs/',
+      to: '/runs',
+      activePrefix: '/runs',
       badge: runs.activeCount > 0 ? `${runs.activeCount} live` : undefined,
-      empty: runs.latestId === null,
     },
     { key: 'tickets', label: 'Tickets', icon: <TagIcon size={16} />, to: '/tickets' },
-    { key: 'repos', label: 'Repositories', icon: <BranchIcon size={16} />, to: '/setup/source-code' },
+    // The managed screens, not the first-run wizard: landing back in onboarding
+    // to check a token is disorienting.
+    { key: 'repos', label: 'Repositories', icon: <BranchIcon size={16} />, to: '/repositories' },
     {
       key: 'connections',
       label: 'Connections',
       icon: <PlugIcon size={16} />,
-      to: '/setup/project-management',
+      to: '/connections',
     },
     { key: 'settings', label: 'Settings', icon: <GearIcon size={16} /> },
   ]

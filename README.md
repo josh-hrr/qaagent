@@ -83,8 +83,29 @@ a trailing `=` is a soft line break — so join the pieces before opening it. Po
 | 05 | Generation run | **built** — `/runs/:id` |
 | 06 | Review workspace | **built** — `/runs/:id/review` |
 | 07 | Export CSV / Markdown | **built** — the Export dialog on a run |
+| — | Runs list | **built** — `/runs` |
+| — | Repositories (managed) | **built** — `/repositories` |
+| — | Connections (managed) | **built** — `/connections` |
+| — | Settings | designed |
 
 Build order follows the numbering.
+
+## Managed screens vs the first-run wizard
+
+`/setup/project-management` and `/setup/source-code` are the onboarding wizard:
+they exist to get a credential in for the first time. The rail points at the
+managed screens instead — `/repositories` and `/connections` — which show the
+same content settled: the credential's state, when it was last verified, what
+is in scope, and the destructive actions.
+
+- **Re-verify** asks the provider whether the stored credential still works and
+  refreshes what it can see. A repository or team that disappeared is dropped;
+  one that appeared arrives **unselected**, so nothing silently enters scope.
+- A rejected credential is recorded on the connection (status, message, time)
+  rather than raised — the screen shows what is wrong and what to do about it.
+- **Runs** at `/runs` lists every run with its status, stage, counts and cost;
+  filters are server-side and the counts cover the whole list, not the page. It
+  polls only while something is running.
 
 ## How auth works
 

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
@@ -104,6 +104,7 @@ def _serialize(run: Run, *, detail: bool) -> dict:
         "costCapUsd": str(run.cost_cap_usd),
         "stoppedEarly": run.stopped_early,
         "stoppedEarlyReason": run.stopped_early_reason,
+        "createdBy": run.created_by.email if run.created_by_id else "",
         "createdAt": run.created_at.isoformat(),
         "startedAt": run.started_at.isoformat() if run.started_at else None,
         "finishedAt": run.finished_at.isoformat() if run.finished_at else None,
@@ -221,16 +222,47 @@ def cancel_run(request: Request, run_id: int) -> Response:
     return Response({"run": _serialize(run, detail=False)})
 
 
+# The list screen asks for a page at a time; a workspace accumulates runs fast.
+PAGE_SIZE = 50
+MAX_PAGE_SIZE = 200
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def list_runs(request: Request) -> Response:
-    runs = Run.objects.all()
+    runs = Run.objects.select_related("created_by")
     ticket = request.query_params.get("ticketId")
     if ticket:
         runs = runs.filter(ticket_linear_id=ticket)
+
+    # Counts are of the whole list, not the page: a filter chip that only
+    # counted what is on screen would be useless.
+    counts = {"all": runs.count()}
+    for value in RunStatus.values:
+        counts[value] = runs.filter(status=value).count()
+
+    status_filter = request.query_params.get("status", "")
+    if status_filter in RunStatus.values:
+        runs = runs.filter(status=status_filter)
+
+    query = (request.query_params.get("q") or "").strip()
+    if query:
+        runs = runs.filter(Q(ticket_identifier__icontains=query) | Q(ticket_title__icontains=query))
+
+    try:
+        limit = min(int(request.query_params.get("limit", PAGE_SIZE)), MAX_PAGE_SIZE)
+        offset = max(int(request.query_params.get("offset", 0)), 0)
+    except ValueError:
+        limit, offset = PAGE_SIZE, 0
+
+    total = runs.count()
+    page = runs[offset : offset + limit]
     return Response(
         {
-            "runs": [_serialize(run, detail=False) for run in runs[:50]],
+            "runs": [_serialize(run, detail=False) for run in page],
+            "total": total,
+            "offset": offset,
+            "counts": counts,
             # For the "N live" badge in the navigation rail.
             "activeCount": Run.objects.exclude(status__in=TERMINAL_STATUSES).count(),
             "spend": monthly_spend(),

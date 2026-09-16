@@ -1,4 +1,5 @@
 import base64
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
@@ -11,7 +12,8 @@ from accounts.models import User
 from .apps import check_credential_encryption_key
 from .crypto import DEV_KEY, CredentialDecryptionError, decrypt, encrypt, hint_for
 from .linear import LinearAccount, LinearError, LinearTeamInfo, fetch_account
-from .models import Connection, LinearTeam, Provider
+from .azure import AzureError
+from .models import Connection, LinearTeam, Provider, Repository
 
 # The test runner sets DEBUG=False, which correctly disables the development
 # fallback key, so tests bring their own.
@@ -344,3 +346,82 @@ class ConnectionAuthTests(TestCase):
             reverse("connections:linear-verify"), {"apiKey": API_KEY}, "application/json"
         )
         self.assertEqual(response.status_code, 403)
+
+
+@override_settings(CREDENTIAL_ENCRYPTION_KEY=TEST_ENCRYPTION_KEY)
+class ReverifyTests(TestCase):
+    """A stored credential is only as good as the last time somebody asked."""
+
+    def setUp(self):
+        self.client.force_login(User.objects.create_user("dev@example.com"))
+
+    def azure(self):
+        connection = Connection.objects.create(
+            provider=Provider.AZURE_DEVOPS, organization_name="acme", status="connected"
+        )
+        connection.set_credential("pat")
+        connection.save()
+        Repository.objects.create(
+            connection=connection, external_id="r1", name="core-api", selected=True
+        )
+        Repository.objects.create(connection=connection, external_id="r2", name="old-repo")
+        return connection
+
+    def test_reverify_keeps_selection_and_drops_repositories_that_vanished(self):
+        account = SimpleNamespace(
+            display_name="Dev", email="dev@acme.com", organization="acme",
+            repositories=[
+                SimpleNamespace(id="r1", name="core-api", project_name="Core", default_branch="main",
+                                web_url="https://x", remote_url="https://x", size_bytes=10),
+                SimpleNamespace(id="r3", name="new-repo", project_name="Core", default_branch="main",
+                                web_url="https://y", remote_url="https://y", size_bytes=20),
+            ],
+        )
+        connection = self.azure()
+        with patch("connections.views.fetch_azure_account", return_value=account):
+            response = self.client.post(reverse("connections:azure-reverify"))
+
+        self.assertEqual(response.status_code, 200)
+        repos = {r["name"]: r for r in response.json()["connection"]["repositories"]}
+        self.assertEqual(sorted(repos), ["core-api", "new-repo"])
+        self.assertTrue(repos["core-api"]["selected"])
+        # A repository that appears later does not silently enter scope.
+        self.assertFalse(repos["new-repo"]["selected"])
+        connection.refresh_from_db()
+        self.assertEqual(connection.status, "connected")
+        self.assertIsNotNone(connection.last_verified_at)
+
+    def test_a_rejected_token_is_recorded_not_raised(self):
+        connection = self.azure()
+        with patch("connections.views.fetch_azure_account",
+                   side_effect=AzureError("invalid_token", "Azure DevOps rejected that token.")):
+            response = self.client.post(reverse("connections:azure-reverify"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["code"], "invalid_token")
+        connection.refresh_from_db()
+        self.assertEqual(connection.status, "error")
+        self.assertIn("rejected", connection.last_error)
+
+    def test_linear_reverify_refreshes_teams(self):
+        connection = Connection.objects.create(provider=Provider.LINEAR, status="connected")
+        connection.set_credential("lin_api_x")
+        connection.save()
+        LinearTeam.objects.create(connection=connection, linear_id="t1", key="TES", name="Old name", selected=True)
+        LinearTeam.objects.create(connection=connection, linear_id="t9", key="GON", name="Gone", selected=False)
+
+        account = SimpleNamespace(
+            user_id="u", name="Dev", email="dev@acme.com", organization_id="o",
+            organization_name="Acme", organization_url_key="acme",
+            teams=[SimpleNamespace(id="t1", key="TES", name="Test Engineering")],
+        )
+        with patch("connections.views.fetch_account", return_value=account):
+            response = self.client.post(reverse("connections:linear-reverify"))
+
+        teams = response.json()["connection"]["teams"]
+        self.assertEqual([t["name"] for t in teams], ["Test Engineering"])
+        self.assertTrue(teams[0]["selected"])
+
+    def test_reverify_needs_a_connection(self):
+        self.assertEqual(self.client.post(reverse("connections:azure-reverify")).status_code, 404)
+        self.assertEqual(self.client.post(reverse("connections:linear-reverify")).status_code, 404)

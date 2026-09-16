@@ -351,3 +351,101 @@ def disconnect_linear(request: Request) -> Response:
         )
     log.info("Linear disconnected by %s", request.user.email)
     return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def reverify_azure(request: Request) -> Response:
+    """Check the stored token again, and refresh what the repositories look like.
+
+    A personal access token expires on its own schedule, so the only honest
+    answer to "is this still working" is to ask Azure now. Selection survives:
+    only metadata is refreshed.
+    """
+    connection = Connection.objects.filter(provider=Provider.AZURE_DEVOPS).first()
+    if connection is None:
+        return Response(
+            {"detail": "Azure DevOps is not connected.", "code": "not_connected"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        account = fetch_azure_account(
+            connection.organization_name, connection.credential, connection.organization_ref
+        )
+    except AzureError as exc:
+        connection.mark_failed(exc.message)
+        connection.save(update_fields=["status", "last_error", "updated_at"])
+        return Response(
+            {"connection": ConnectionSerializer(connection).data, "detail": exc.message, "code": exc.code},
+            status=status.HTTP_200_OK,
+        )
+
+    with transaction.atomic():
+        selected = set(connection.repositories.filter(selected=True).values_list("external_id", flat=True))
+        visible = {r.id: r for r in account.repositories}
+        # A repository that disappeared from the token's view is dropped; one
+        # that appeared arrives unselected rather than silently entering scope.
+        connection.repositories.exclude(external_id__in=list(visible.keys())).delete()
+        for repo in account.repositories:
+            Repository.objects.update_or_create(
+                connection=connection,
+                external_id=repo.id,
+                defaults={
+                    "name": repo.name,
+                    "project_name": repo.project_name,
+                    "default_branch": repo.default_branch,
+                    "web_url": repo.web_url,
+                    "remote_url": repo.remote_url,
+                    "size_bytes": repo.size_bytes,
+                    "selected": repo.id in selected,
+                },
+            )
+        connection.account_name = account.display_name
+        connection.account_email = account.email
+        connection.mark_verified()
+        connection.save()
+
+    connection.refresh_from_db()
+    return Response({"connection": ConnectionSerializer(connection).data})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def reverify_linear(request: Request) -> Response:
+    """Check the stored API key again and refresh the team list."""
+    connection = Connection.objects.filter(provider=Provider.LINEAR).first()
+    if connection is None:
+        return Response(
+            {"detail": "Linear is not connected.", "code": "not_connected"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        account = fetch_account(connection.credential)
+    except LinearError as exc:
+        connection.mark_failed(exc.message)
+        connection.save(update_fields=["status", "last_error", "updated_at"])
+        return Response(
+            {"connection": ConnectionSerializer(connection).data, "detail": exc.message, "code": exc.code},
+            status=status.HTTP_200_OK,
+        )
+
+    with transaction.atomic():
+        selected = set(connection.linear_teams.filter(selected=True).values_list("linear_id", flat=True))
+        visible = {t.id for t in account.teams}
+        connection.linear_teams.exclude(linear_id__in=list(visible)).delete()
+        for team in account.teams:
+            LinearTeam.objects.update_or_create(
+                connection=connection,
+                linear_id=team.id,
+                defaults={"key": team.key, "name": team.name, "selected": team.id in selected},
+            )
+        connection.account_name = account.name
+        connection.account_email = account.email
+        connection.organization_name = account.organization_name
+        connection.mark_verified()
+        connection.save()
+
+    connection.refresh_from_db()
+    return Response({"connection": ConnectionSerializer(connection).data})

@@ -251,6 +251,9 @@ export const connectionsApi = {
   /** Change which teams sync without re-sending the key. */
   updateLinearTeams: (teamIds: string[]) =>
     api.patch<{ connection: Connection }>('/connections/linear/teams/', { teamIds }),
+  /** Ask Linear whether the stored key still works, and refresh the teams. */
+  reverifyLinear: () =>
+    api.post<{ connection: Connection; detail?: string; code?: string }>('/connections/linear/reverify/'),
   disconnectLinear: () => api.delete<void>('/connections/linear/disconnect/'),
 
   /** Checks the token and lists its repositories. Stores nothing. */
@@ -268,6 +271,9 @@ export const connectionsApi = {
     repositoryIds?: string[]
     diffScopeStrategy?: DiffScopeStrategy
   }) => api.patch<{ connection: Connection }>('/connections/azure/settings/', input),
+  /** Ask Azure whether the stored token still works, and refresh the repositories. */
+  reverifyAzure: () =>
+    api.post<{ connection: Connection; detail?: string; code?: string }>('/connections/azure/reverify/'),
   disconnectAzure: () => api.delete<void>('/connections/azure/disconnect/'),
 }
 
@@ -354,6 +360,7 @@ export type RunSummary = {
   costCapUsd: string
   stoppedEarly: boolean
   stoppedEarlyReason: string
+  createdBy: string
   createdAt: string
   startedAt: string | null
   finishedAt: string | null
@@ -395,6 +402,24 @@ export type Spend = {
   capReached: boolean
 }
 
+export type RunListParams = {
+  status?: RunStatus | ''
+  q?: string
+  ticketId?: string
+  limit?: number
+  offset?: number
+}
+
+export type RunListResponse = {
+  runs: RunSummary[]
+  total: number
+  offset: number
+  /** Counts over the whole list, not the page — the filter chips show these. */
+  counts: Record<string, number>
+  activeCount: number
+  spend: Spend
+}
+
 export const runsApi = {
   /** Only the ticket id is sent; the server re-reads the ticket from Linear.
    *  `excludePullRequests` carries links the user unticked on the ticket screen. */
@@ -405,7 +430,14 @@ export const runsApi = {
       excludePullRequests,
     }),
   get: (runId: number | string) => api.get<{ run: RunDetail }>(`/runs/${runId}/`),
-  list: () => api.get<{ runs: RunSummary[]; activeCount: number; spend: Spend }>('/runs/'),
+  list: (params: RunListParams = {}) => {
+    const query = new URLSearchParams()
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== '') query.set(key, String(value))
+    }
+    const suffix = query.toString()
+    return api.get<RunListResponse>(`/runs/${suffix ? `?${suffix}` : ''}`)
+  },
   cancel: (runId: number | string) => api.post<{ run: RunSummary }>(`/runs/${runId}/cancel/`),
 }
 

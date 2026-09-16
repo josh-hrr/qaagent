@@ -4,12 +4,15 @@ import type { ReactElement } from 'react'
 import { AuthProvider } from './auth/AuthProvider'
 import { useAuth } from './auth/AuthContext'
 import { SpinnerIcon } from './components/icons'
+import { ConnectionsPage } from './routes/ConnectionsPage'
 import { ConnectProjectManagementPage } from './routes/ConnectProjectManagementPage'
 import { ConnectRepositoryPage } from './routes/ConnectRepositoryPage'
 import { HomePage } from './routes/HomePage'
 import { MagicLinkPage } from './routes/MagicLinkPage'
+import { RepositoriesPage } from './routes/RepositoriesPage'
 import { ReviewWorkspacePage } from './routes/ReviewWorkspacePage'
 import { RunProgressPage } from './routes/RunProgressPage'
+import { RunsListPage } from './routes/RunsListPage'
 import { SignInPage } from './routes/SignInPage'
 import { TicketPickerPage } from './routes/TicketPickerPage'
 
@@ -71,6 +74,30 @@ export default function App() {
             element={
               <RequireAuth>
                 <TicketPickerPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/repositories"
+            element={
+              <RequireAuth>
+                <RepositoriesPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/connections"
+            element={
+              <RequireAuth>
+                <ConnectionsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/runs"
+            element={
+              <RequireAuth>
+                <RunsListPage />
               </RequireAuth>
             }
           />
