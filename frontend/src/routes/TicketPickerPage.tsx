@@ -239,7 +239,7 @@ export function TicketPickerPage() {
 
             {/* Column names, aligned to the row below: 2px of left border plus
                 the row's own padding. */}
-            <div className="flex shrink-0 flex-wrap items-center gap-x-3 border-t border-edge px-4 pb-2 pl-4.5">
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 px-4 pt-0.5 pb-2 pl-4.5">
               <span className="label-micro w-18 shrink-0">Ticket</span>
               <span className="label-micro w-26 shrink-0">State</span>
               <span className="label-micro min-w-0 flex-1">Title</span>
