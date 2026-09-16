@@ -231,7 +231,7 @@ export function ConnectionsPage() {
       }
     >
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-5 py-4.5">
-        <div className="flex max-w-250 flex-col gap-3.5">
+        <div className="mx-auto flex w-full max-w-225 flex-col gap-3.5">
           <section>
             <h2 className="mb-1 font-display text-[15px] font-semibold text-fg">
               Project management tool

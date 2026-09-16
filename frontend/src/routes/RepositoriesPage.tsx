@@ -282,7 +282,7 @@ export function RepositoriesPage() {
       }
     >
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-5 py-4.5">
-        <div className="flex max-w-250 flex-col gap-3.5">
+        <div className="mx-auto flex w-full max-w-225 flex-col gap-3.5">
           {/* provider switch — the same one the first-run screen uses, so the
               two screens do not disagree about what is available. */}
           <section>
