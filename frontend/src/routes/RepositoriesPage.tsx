@@ -33,6 +33,11 @@ const SCOPES: { key: DiffScopeStrategy; label: string; note: string; built: bool
   },
 ];
 
+/** Source-code hosts we intend to support. Phase 2 — facts, not buttons. */
+const PLANNED = [
+  { name: "GitHub", note: "A GitHub App, so the token is the workspace's rather than one person's." },
+];
+
 const RUN_FACTS = [
   "Reads the changed files over the Azure DevOps API. The repo is never copied.",
   "Reads the files the ticket changed, plus what might be affected by them.",
@@ -458,6 +463,28 @@ export function RepositoriesPage() {
                 );
               })}
             </div>
+          </section>
+
+          {/* planned providers */}
+          <section className="overflow-hidden rounded-[10px] border border-edge bg-ink-800">
+            <div className="border-b border-edge px-4.75 py-3.5">
+              <h2 className="text-[13.5px] font-semibold text-fg">Other source-code providers</h2>
+              <p className="mt-0.5 font-mono text-[11px] text-fg-faint">
+                Planned for phase 2 — nothing to configure yet.
+              </p>
+            </div>
+            {PLANNED.map((provider) => (
+              <div key={provider.name} className="flex items-center gap-3 border-t border-[#151a1e] px-4.75 py-3.25">
+                <span className="flex size-6.5 shrink-0 items-center justify-center rounded-md border border-edge bg-ink-700">
+                  <BranchIcon size={13} className="text-fg-ghost" />
+                </span>
+                <span className="w-32 shrink-0 text-[12.5px] text-fg-dimmer">{provider.name}</span>
+                <span className="min-w-0 flex-1 truncate text-[11.5px] text-fg-faint">{provider.note}</span>
+                <span className="shrink-0 rounded-[3px] border border-edge-strong px-1.5 py-0.5 font-mono text-[10px] text-fg-faint">
+                  planned
+                </span>
+              </div>
+            ))}
           </section>
 
           {/* what a run reads */}
