@@ -86,9 +86,21 @@ a trailing `=` is a soft line break — so join the pieces before opening it. Po
 | — | Runs list | **built** — `/runs` |
 | — | Repositories (managed) | **built** — `/repositories` |
 | — | Connections (managed) | **built** — `/connections` |
-| — | Settings | designed |
+| — | Settings | **built** — `/settings` |
 
 Build order follows the numbering.
+
+## Settings (`/settings`)
+
+Written for a tester, not an operator: it reports the running configuration in
+words — the model and what it is good at, the per-run limits, the sign-in
+policy, the monthly spend — and marks it `workspace`, meaning "ask whoever set
+this up". It deliberately names no environment variable, no file path and no
+management command, and does **not** surface `check --deploy` output: a reader
+of that screen cannot act on any of it.
+
+The one editable part is a person's **export defaults**, stored on their user
+row and used to open the export dialog.
 
 ## Managed screens vs the first-run wizard
 

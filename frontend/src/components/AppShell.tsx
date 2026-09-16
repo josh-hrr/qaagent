@@ -40,7 +40,7 @@ function navItems(runs: RunsState): NavItem[] {
       icon: <PlugIcon size={16} />,
       to: '/connections',
     },
-    { key: 'settings', label: 'Settings', icon: <GearIcon size={16} /> },
+    { key: 'settings', label: 'Settings', icon: <GearIcon size={16} />, to: '/settings' },
   ]
 }
 

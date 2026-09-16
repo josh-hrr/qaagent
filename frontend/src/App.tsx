@@ -13,6 +13,7 @@ import { RepositoriesPage } from './routes/RepositoriesPage'
 import { ReviewWorkspacePage } from './routes/ReviewWorkspacePage'
 import { RunProgressPage } from './routes/RunProgressPage'
 import { RunsListPage } from './routes/RunsListPage'
+import { SettingsPage } from './routes/SettingsPage'
 import { SignInPage } from './routes/SignInPage'
 import { TicketPickerPage } from './routes/TicketPickerPage'
 
@@ -90,6 +91,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <ConnectionsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <SettingsPage />
               </RequireAuth>
             }
           />

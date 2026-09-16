@@ -679,6 +679,45 @@ export const exportApi = {
   },
 }
 
+/* --- workspace settings ---------------------------------------------------- */
+
+export type ExportDefaults = {
+  fileFormat: FileFormat
+  layout: MarkdownLayout
+  columns: string[]
+  options: Record<string, boolean>
+}
+
+export type WorkspaceSettings = {
+  spend: Spend
+  generation: {
+    model: string
+    modelName: string
+    modelNote: string
+    effort: string
+    effortNote: string
+    costCapUsd: string
+    maxFiles: number
+    maxRounds: number
+  }
+  signIn: {
+    allowedEmailDomains: string[]
+    idleTimeout: string
+    absoluteTimeout: string
+    magicLinkMinutes: number
+  }
+  exportDefaults: ExportDefaults
+  exportColumns: ExportColumn[]
+  account: { email: string; displayName: string; joined: string }
+}
+
+export const settingsApi = {
+  get: () => api.get<WorkspaceSettings>('/settings/'),
+  /** The one part of this screen a person owns outright. */
+  updateExportDefaults: (defaults: ExportDefaults) =>
+    api.patch<{ exportDefaults: ExportDefaults }>('/settings/export-defaults/', defaults),
+}
+
 export const authApi = {
   /** Also primes the CSRF cookie, so call it before any POST. */
   options: () => api.get<SignInOptions>('/auth/options/'),
