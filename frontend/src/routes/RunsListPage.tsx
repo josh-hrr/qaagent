@@ -142,10 +142,11 @@ export function RunsListPage() {
             <div className="flex gap-2.5 rounded-lg border border-edge bg-ink-800 px-3.75 py-3.25 text-left">
               <AlertIcon size={15} className="mt-0.5 shrink-0 text-warn" />
               <div>
-                <p className="text-[12.5px] text-fg-muted">Generation happens in the worker process</p>
-                <p className="font-mono text-[11px] text-fg-faint">python manage.py db_worker</p>
+                <p className="text-[12.5px] text-fg-muted">A run takes a couple of minutes</p>
                 <p className="mt-1 text-[11.5px] text-fg-faint text-pretty">
-                  Without it a run sits at <span className="font-mono text-fg-dim">queued</span> and never moves.
+                  It reads the ticket, then the code, then writes. If one stays at{" "}
+                  <span className="font-mono text-fg-dim">queued</span> for longer than that, tell whoever looks
+                  after QA Agent.
                 </p>
               </div>
             </div>

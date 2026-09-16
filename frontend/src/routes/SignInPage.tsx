@@ -1,62 +1,73 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import { BrandPanel } from '../components/BrandPanel'
-import { Button, ButtonLink } from '../components/Button'
-import { Field } from '../components/Field'
-import { AlertIcon, LockIcon, MailIcon, providerMarks } from '../components/icons'
-import { ApiError, authApi, type SignInOptions } from '../lib/api'
+import { BrandPanel } from "../components/BrandPanel";
+import { Button, ButtonLink } from "../components/Button";
+import { Field } from "../components/Field";
+import {
+  AlertIcon,
+  LockIcon,
+  MailIcon,
+  providerMarks,
+} from "../components/icons";
+import { ApiError, authApi, type SignInOptions } from "../lib/api";
 
-const RESEND_COOLDOWN_SECONDS = 30
+const RESEND_COOLDOWN_SECONDS = 30;
 
 export function SignInPage() {
-  const [options, setOptions] = useState<SignInOptions | null>(null)
-  const [optionsFailed, setOptionsFailed] = useState(false)
+  const [options, setOptions] = useState<SignInOptions | null>(null);
+  const [optionsFailed, setOptionsFailed] = useState(false);
 
-  const [email, setEmail] = useState('')
-  const [sentTo, setSentTo] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<ApiError | null>(null)
-  const [cooldown, setCooldown] = useState(0)
+  const [email, setEmail] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     authApi
       .options()
       .then((value) => !cancelled && setOptions(value))
-      .catch(() => !cancelled && setOptionsFailed(true))
+      .catch(() => !cancelled && setOptionsFailed(true));
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   // Resend cooldown, so an impatient click cannot burn the hourly rate limit.
   useEffect(() => {
-    if (cooldown <= 0) return
-    const timer = window.setTimeout(() => setCooldown((n) => n - 1), 1000)
-    return () => window.clearTimeout(timer)
-  }, [cooldown])
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((n) => n - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
 
-  const configuredProviders = options?.providers.filter((p) => p.configured) ?? []
-  const unconfiguredProviders = options?.providers.filter((p) => !p.configured) ?? []
+  const configuredProviders =
+    options?.providers.filter((p) => p.configured) ?? [];
+  const unconfiguredProviders =
+    options?.providers.filter((p) => !p.configured) ?? [];
   // With no SSO wired up yet, the email form is the only thing that works — so
   // it becomes the primary action instead of leaving a dead button on top.
-  const emailIsPrimary = options !== null && configuredProviders.length === 0
+  const emailIsPrimary = options !== null && configuredProviders.length === 0;
 
   async function submit(event: FormEvent) {
-    event.preventDefault()
-    const address = email.trim()
-    if (!address || submitting) return
+    event.preventDefault();
+    const address = email.trim();
+    if (!address || submitting) return;
 
-    setSubmitting(true)
-    setError(null)
+    setSubmitting(true);
+    setError(null);
     try {
-      await authApi.requestMagicLink(address)
-      setSentTo(address)
-      setCooldown(RESEND_COOLDOWN_SECONDS)
+      await authApi.requestMagicLink(address);
+      setSentTo(address);
+      setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
-      setError(err instanceof ApiError ? err : new ApiError('Something went wrong.', { status: 0 }))
+      setError(
+        err instanceof ApiError
+          ? err
+          : new ApiError("Something went wrong.", { status: 0 }),
+      );
     } finally {
-      setSubmitting(false)
+      setSubmitting(false);
     }
   }
 
@@ -75,8 +86,8 @@ export function SignInPage() {
               error={error}
               onResend={submit}
               onUseAnotherAddress={() => {
-                setSentTo(null)
-                setError(null)
+                setSentTo(null);
+                setError(null);
               }}
             />
           ) : (
@@ -85,32 +96,31 @@ export function SignInPage() {
                 Sign in
               </h2>
               <p className="mb-7 text-[13.5px] text-fg-dimmer">
-                Use the account you already use for Azure DevOps.
+                We email you a link that signs you in. No password to set or remember.
               </p>
 
               {optionsFailed && (
                 <Callout tone="danger" className="mb-5">
-                  Could not reach the API. Start the backend with{' '}
-                  <code className="font-mono text-fg-muted">python manage.py runserver</code> and
-                  reload.
+                  QA Agent is not responding. Try again in a moment, and tell whoever looks after it if
+                  this keeps happening.
                 </Callout>
               )}
 
               {configuredProviders.map((provider, index) => {
-                const Mark = providerMarks[provider.key]
+                const Mark = providerMarks[provider.key];
                 return (
                   <ButtonLink
                     key={provider.key}
                     href={authApi.ssoStartUrl(provider.key)}
                     size="lg"
                     block
-                    variant={index === 0 ? 'primary' : 'secondary'}
+                    variant={index === 0 ? "primary" : "secondary"}
                     icon={Mark ? <Mark size={16} /> : undefined}
                     className="mb-2.5"
                   >
                     Continue with {provider.label}
                   </ButtonLink>
-                )
+                );
               })}
 
               {configuredProviders.length > 0 && <Divider className="my-5.5" />}
@@ -124,11 +134,11 @@ export function SignInPage() {
                   placeholder="you@yourcompany.com"
                   value={email}
                   onChange={(e) => {
-                    setEmail(e.target.value)
-                    if (error) setError(null)
+                    setEmail(e.target.value);
+                    if (error) setError(null);
                   }}
                   disabled={submitting}
-                  error={error?.fieldError('email') ?? undefined}
+                  error={error?.fieldError("email") ?? undefined}
                   hint={
                     options?.allowedEmailDomains.length
                       ? `Accounts on ${formatDomains(options.allowedEmailDomains)} only.`
@@ -137,7 +147,7 @@ export function SignInPage() {
                   required
                 />
 
-                {error && !error.fieldError('email') && (
+                {error && !error.fieldError("email") && (
                   <Callout tone="danger" className="mt-3">
                     {error.message}
                   </Callout>
@@ -147,13 +157,13 @@ export function SignInPage() {
                   type="submit"
                   size="lg"
                   block
-                  variant={emailIsPrimary ? 'primary' : 'secondary'}
+                  variant={emailIsPrimary ? "primary" : "secondary"}
                   busy={submitting}
                   disabled={!email.trim()}
                   icon={emailIsPrimary ? <MailIcon size={16} /> : undefined}
                   className="mt-3"
                 >
-                  {submitting ? 'Sending…' : 'Send sign-in link'}
+                  {submitting ? "Sending…" : "Send sign-in link"}
                 </Button>
               </form>
 
@@ -162,7 +172,7 @@ export function SignInPage() {
                   <Divider className="my-5.5" />
                   <ul className="space-y-2">
                     {unconfiguredProviders.map((provider) => {
-                      const Mark = providerMarks[provider.key]
+                      const Mark = providerMarks[provider.key];
                       return (
                         <li
                           key={provider.key}
@@ -176,13 +186,12 @@ export function SignInPage() {
                             NOT CONFIGURED
                           </span>
                         </li>
-                      )
+                      );
                     })}
                   </ul>
-                  <p className="mt-2.5 text-[11.5px] text-fg-faint">
-                    Add the client id and secret to{' '}
-                    <code className="font-mono text-fg-dimmer">backend/.env</code> to turn these on.
-                  </p>
+
+                  {/* Was: instructions for adding SSO credentials. Operator detail, and
+                      nobody reading this screen can act on it. */}
                 </>
               )}
 
@@ -192,7 +201,7 @@ export function SignInPage() {
         </div>
       </div>
     </main>
-  )
+  );
 }
 
 /* --- sub-views ----------------------------------------------------------- */
@@ -206,20 +215,20 @@ function LinkSentPanel({
   onResend,
   onUseAnotherAddress,
 }: {
-  email: string
-  ttlMinutes: number
-  cooldown: number
-  resending: boolean
-  error: ApiError | null
-  onResend: (event: FormEvent) => void
-  onUseAnotherAddress: () => void
+  email: string;
+  ttlMinutes: number;
+  cooldown: number;
+  resending: boolean;
+  error: ApiError | null;
+  onResend: (event: FormEvent) => void;
+  onUseAnotherAddress: () => void;
 }) {
-  const headingRef = useRef<HTMLHeadingElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   // Move focus to the confirmation so a screen reader announces the change.
   useEffect(() => {
-    headingRef.current?.focus()
-  }, [])
+    headingRef.current?.focus();
+  }, []);
 
   return (
     <div>
@@ -235,8 +244,8 @@ function LinkSentPanel({
         Check your inbox
       </h2>
       <p className="mb-7 text-[13.5px] text-fg-dimmer text-pretty">
-        If <span className="font-mono text-fg-muted">{email}</span> can sign in, a link is on its
-        way. It works once and expires in {ttlMinutes} minutes.
+        If <span className="font-mono text-fg-muted">{email}</span> can sign in,
+        a link is on its way. It works once and expires in {ttlMinutes} minutes.
       </p>
 
       {error && (
@@ -253,7 +262,7 @@ function LinkSentPanel({
         disabled={cooldown > 0}
         onClick={onResend}
       >
-        {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend the link'}
+        {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend the link"}
       </Button>
 
       <button
@@ -265,11 +274,11 @@ function LinkSentPanel({
       </button>
 
       <Callout tone="neutral" className="mt-7" icon={<MailIcon size={14} />}>
-        No email in development? The link is printed in the Django console that runs{' '}
-        <code className="font-mono text-fg-dimmer">runserver</code>.
+        Nothing in your inbox after a minute? Check spam, then try again — the previous link stops
+        working as soon as a new one is sent.
       </Callout>
     </div>
-  )
+  );
 }
 
 function SecurityNote() {
@@ -277,21 +286,23 @@ function SecurityNote() {
     <div className="mt-6 flex gap-2.5 rounded-[7px] border border-edge bg-ink-700 px-3 py-3">
       <LockIcon size={14} className="mt-0.5 shrink-0 text-fg-faint" />
       <p className="text-[12px] text-fg-dimmer text-pretty">
-        Repository and ticket credentials are stored per workspace, never per user. Code is read
-        over the API for one run and never stored.
+        Repository and ticket credentials are stored per workspace, never per
+        user. Code is read over the API for one run and never stored.
       </p>
     </div>
-  )
+  );
 }
 
 function Divider({ className }: { className?: string }) {
   return (
-    <div className={`flex items-center gap-3 ${className ?? ''}`}>
+    <div className={`flex items-center gap-3 ${className ?? ""}`}>
       <span className="h-px flex-1 bg-edge" />
-      <span className="font-mono text-[10px] tracking-[0.1em] text-fg-faint">OR</span>
+      <span className="font-mono text-[10px] tracking-[0.1em] text-fg-faint">
+        OR
+      </span>
       <span className="h-px flex-1 bg-edge" />
     </div>
-  )
+  );
 }
 
 function Callout({
@@ -300,27 +311,31 @@ function Callout({
   className,
   children,
 }: {
-  tone: 'danger' | 'neutral'
-  icon?: React.ReactNode
-  className?: string
-  children: React.ReactNode
+  tone: "danger" | "neutral";
+  icon?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
 }) {
   const tones = {
-    danger: 'border-danger-edge bg-danger-bg text-danger',
-    neutral: 'border-edge bg-ink-700 text-fg-dimmer',
-  }
+    danger: "border-danger-edge bg-danger-bg text-danger",
+    neutral: "border-edge bg-ink-700 text-fg-dimmer",
+  };
   return (
     <div
-      role={tone === 'danger' ? 'alert' : undefined}
-      className={`flex gap-2.5 rounded-[7px] border px-3 py-2.5 text-[12px] text-pretty ${tones[tone]} ${className ?? ''}`}
+      role={tone === "danger" ? "alert" : undefined}
+      className={`flex gap-2.5 rounded-[7px] border px-3 py-2.5 text-[12px] text-pretty ${tones[tone]} ${className ?? ""}`}
     >
-      <span className="mt-px shrink-0">{icon ?? (tone === 'danger' ? <AlertIcon size={14} /> : null)}</span>
-      <span className={tone === 'danger' ? 'text-fg-muted' : ''}>{children}</span>
+      <span className="mt-px shrink-0">
+        {icon ?? (tone === "danger" ? <AlertIcon size={14} /> : null)}
+      </span>
+      <span className={tone === "danger" ? "text-fg-muted" : ""}>
+        {children}
+      </span>
     </div>
-  )
+  );
 }
 
 function formatDomains(domains: string[]): string {
-  if (domains.length === 1) return `@${domains[0]}`
-  return domains.map((d) => `@${d}`).join(', ')
+  if (domains.length === 1) return `@${domains[0]}`;
+  return domains.map((d) => `@${d}`).join(", ");
 }

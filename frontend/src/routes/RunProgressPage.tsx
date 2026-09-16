@@ -25,37 +25,37 @@ const REMEDIATION: Record<string, { hint: string; to?: string; cta?: string }> =
     },
     no_usable_pull_request: {
       hint: "Every linked pull request was skipped. Connect the repository it lives in, or link a PR that is not abandoned.",
-      to: "/setup/source-code",
+      to: "/repositories",
       cta: "Check repositories",
     },
     source_not_connected: {
       hint: "Connect Azure DevOps first.",
-      to: "/setup/source-code",
+      to: "/repositories",
       cta: "Connect repository",
     },
     linear_not_connected: {
       hint: "Connect Linear first.",
-      to: "/setup/project-management",
+      to: "/connections",
       cta: "Connect Linear",
     },
     invalid_token: {
       hint: "The Azure DevOps token was rejected or has expired. Replace it on the repository screen.",
-      to: "/setup/source-code",
+      to: "/repositories",
       cta: "Replace token",
     },
     invalid_key: {
       hint: "The Linear API key was rejected. Replace it on the Linear screen.",
-      to: "/setup/project-management",
+      to: "/connections",
       cta: "Replace key",
     },
     llm_auth: {
-      hint: "Set a valid ANTHROPIC_API_KEY in backend/.env and restart the worker.",
+      hint: "QA Agent cannot reach the model it writes test cases with. Tell whoever looks after it.",
     },
     llm_not_configured: {
-      hint: "Add ANTHROPIC_API_KEY to backend/.env, then restart the worker (python manage.py db_worker).",
+      hint: "Test case generation is not set up yet in this workspace. Tell whoever looks after QA Agent.",
     },
     llm_model_not_found: {
-      hint: "Fix LLM_MODEL in backend/.env (e.g. claude-haiku-4-5, with nothing after it on the line), then restart the worker.",
+      hint: "The workspace is set to a model that no longer exists. Tell whoever looks after QA Agent.",
     },
     llm_rate_limited: {
       hint: "The model is rate limiting requests. Wait a minute and run again.",
