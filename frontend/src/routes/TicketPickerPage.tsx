@@ -237,6 +237,16 @@ export function TicketPickerPage() {
               </span>
             </div>
 
+            {/* Column names, aligned to the row below: 2px of left border plus
+                the row's own padding. */}
+            <div className="flex shrink-0 flex-wrap items-center gap-x-3 border-t border-edge px-4 pb-2 pl-4.5">
+              <span className="label-micro w-18 shrink-0">Ticket</span>
+              <span className="label-micro w-26 shrink-0">State</span>
+              <span className="label-micro min-w-0 flex-1">Title</span>
+              <span className="label-micro w-40 shrink-0">Pull requests</span>
+              <span className="label-micro w-24 shrink-0 text-center">Readiness</span>
+            </div>
+
             <div className="min-h-0 flex-1 overflow-y-auto border-t border-edge">
               {visible.length === 0 ? (
                 <p className="px-5 py-10 text-center text-[13px] text-fg-faint">

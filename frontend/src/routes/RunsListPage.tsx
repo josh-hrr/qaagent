@@ -191,6 +191,7 @@ export function RunsListPage() {
 
         {/* table header */}
         <div className="flex shrink-0 items-center gap-2.5 border-b border-edge px-5 pb-2">
+          <span className="label-micro w-11">Run</span>
           <span className="label-micro w-20">Ticket</span>
           <span className="label-micro flex-1">Title</span>
           <span className="label-micro w-23.5">Status</span>
@@ -230,6 +231,7 @@ export function RunsListPage() {
                 }}
                 className="flex cursor-pointer items-center gap-2.5 border-b border-b-[#151a1e] border-l-2 border-l-transparent py-2.75 pr-5 pl-4.5 hover:border-l-edge-strong hover:bg-ink-800"
               >
+                <span className="w-11 shrink-0 font-mono text-[11px] text-fg-faint">#{run.id}</span>
                 <span className="w-20 truncate font-mono text-[11px] text-info">{run.ticketIdentifier || "—"}</span>
                 <span className="min-w-0 flex-1 truncate text-[13px] text-fg-muted">
                   {run.ticketTitle || <span className="text-fg-faint">Reading the ticket…</span>}
