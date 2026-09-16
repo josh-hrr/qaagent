@@ -296,7 +296,7 @@ function TicketRow({
       type="button"
       onClick={onSelect}
       aria-current={selected}
-      className={`flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 border-b border-l-2 border-b-[#151A1E] px-4 py-3 text-left transition-colors ${
+      className={`flex w-full cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 border-b border-l-2 border-b-ink-600 px-4 py-3 text-left transition-colors ${
         selected ? 'border-l-signal bg-ink-600' : 'border-l-transparent hover:bg-ink-800'
       }`}
     >

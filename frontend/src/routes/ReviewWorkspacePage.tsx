@@ -805,7 +805,7 @@ function CasesTable({
                   onSelect(c.number);
                 }
               }}
-              className={`flex cursor-pointer items-center gap-3 border-b border-l-2 border-b-[#151a1e] py-3 pr-5 pl-4.5 ${
+              className={`flex cursor-pointer items-center gap-3 border-b border-l-2 border-b-ink-600 py-3 pr-5 pl-4.5 ${
                 on ? "border-l-signal bg-ink-600" : "border-l-transparent hover:bg-ink-800"
               }`}
             >

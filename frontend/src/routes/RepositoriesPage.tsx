@@ -35,7 +35,10 @@ const SCOPES: { key: DiffScopeStrategy; label: string; note: string; built: bool
 
 /** Source-code hosts we intend to support. Phase 2 — facts, not buttons. */
 const PLANNED = [
-  { name: "GitHub", note: "A GitHub App, so the token is the workspace's rather than one person's." },
+  {
+    name: "GitHub",
+    note: "Installed on the organisation as a GitHub App — no personal token, and it survives people leaving.",
+  },
 ];
 
 const RUN_FACTS = [
@@ -345,7 +348,7 @@ export function RepositoriesPage() {
                   role="checkbox"
                   aria-checked={on}
                   onClick={() => toggle(repo)}
-                  className={`flex w-full cursor-pointer items-center gap-3 border-t border-[#151a1e] px-4.75 py-2.5 text-left ${
+                  className={`flex w-full cursor-pointer items-center gap-3 border-t border-ink-600 px-4.75 py-2.5 text-left ${
                     on ? "bg-[#0f1317]" : "hover:bg-ink-700"
                   }`}
                 >
@@ -474,7 +477,7 @@ export function RepositoriesPage() {
               </p>
             </div>
             {PLANNED.map((provider) => (
-              <div key={provider.name} className="flex items-center gap-3 border-t border-[#151a1e] px-4.75 py-3.25">
+              <div key={provider.name} className="flex items-center gap-3 border-t border-ink-600 px-4.75 py-3.25">
                 <span className="flex size-6.5 shrink-0 items-center justify-center rounded-md border border-edge bg-ink-700">
                   <BranchIcon size={13} className="text-fg-ghost" />
                 </span>

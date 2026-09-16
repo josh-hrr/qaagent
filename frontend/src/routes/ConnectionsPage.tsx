@@ -311,7 +311,7 @@ export function ConnectionsPage() {
               <p className="mt-0.5 font-mono text-[11px] text-fg-faint">Planned for phase 2 — nothing to configure yet.</p>
             </div>
             {PLANNED.map((tracker) => (
-              <div key={tracker.name} className="flex items-center gap-3 border-t border-[#151a1e] px-4.75 py-3.25">
+              <div key={tracker.name} className="flex items-center gap-3 border-t border-ink-600 px-4.75 py-3.25">
                 <span className="flex size-6.5 shrink-0 items-center justify-center rounded-md border border-edge bg-ink-700">
                   <PlugIcon size={13} className="text-fg-ghost" />
                 </span>

@@ -229,7 +229,7 @@ export function RunsListPage() {
                     navigate(run.status === "succeeded" ? `/runs/${run.id}/review` : `/runs/${run.id}`);
                   }
                 }}
-                className="flex cursor-pointer items-center gap-2.5 border-b border-b-[#151a1e] border-l-2 border-l-transparent py-2.75 pr-5 pl-4.5 hover:border-l-edge-strong hover:bg-ink-800"
+                className="flex cursor-pointer items-center gap-2.5 border-b border-b-ink-600 border-l-2 border-l-transparent py-2.75 pr-5 pl-4.5 hover:border-l-edge-strong hover:bg-ink-800"
               >
                 <span className="w-11 shrink-0 font-mono text-[11px] text-fg-faint">#{run.id}</span>
                 <span className="w-20 truncate font-mono text-[11px] text-info">{run.ticketIdentifier || "—"}</span>
