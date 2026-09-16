@@ -88,7 +88,7 @@ export function AppShell({
 
   return (
     <div className={`flex min-h-dvh ${fill ? 'xl:h-dvh xl:overflow-hidden' : ''}`}>
-      <aside className="hidden w-59 shrink-0 flex-col border-r border-edge lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-59 shrink-0 flex-col self-start border-r border-edge lg:flex">
         <div className="flex items-center gap-2.5 px-4.5 py-4.5">
           <BrandMark size={26} />
           <span className="font-display text-sm font-bold">QA Agent</span>
@@ -160,7 +160,7 @@ export function AppShell({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col xl:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-13 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-5">
+          <header className="sticky top-0 z-20 flex h-13 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge bg-ink-900 px-5">
             {title && <h1 className="font-display text-[15px] font-semibold">{title}</h1>}
             {subtitle && <div className="font-mono text-[11px] text-fg-faint">{subtitle}</div>}
             <div className="flex-1" />
