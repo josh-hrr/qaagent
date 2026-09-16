@@ -16,8 +16,8 @@ from runs import exporting
     RUN_MAX_FILES=40,
     RUN_MAX_ROUNDS=12,
     WORKSPACE_MONTHLY_CAP_USD=50.0,
-    SESSION_IDLE_TIMEOUT_HOURS=12,
-    SESSION_ABSOLUTE_TIMEOUT_HOURS=168,
+    SESSION_COOKIE_AGE=12 * 3600,
+    SESSION_ABSOLUTE_TIMEOUT=168 * 3600,
     MAGIC_LINK_TTL_MINUTES=15,
     ALLOWED_EMAIL_DOMAINS=["yourcompany.com"],
 )
@@ -86,3 +86,25 @@ class WorkspaceSettingsTests(TestCase):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("workspace-settings")).status_code, 403)
         self.assertEqual(self.client.patch(reverse("export-defaults")).status_code, 403)
+
+
+class RealSettingsModuleTests(TestCase):
+    """No overrides at all — every value the screen reads must really exist.
+
+    The first version read SESSION_IDLE_TIMEOUT_HOURS and
+    SESSION_ABSOLUTE_TIMEOUT_HOURS, which are environment inputs rather than
+    settings. Overriding them in the test invented them, so the suite agreed
+    with the code and the screen still returned 500.
+    """
+
+    def setUp(self):
+        self.client.force_login(User.objects.create_user("dev@example.com"))
+
+    def test_the_screen_loads_against_the_settings_the_server_actually_runs(self):
+        response = self.client.get(reverse("workspace-settings"))
+        self.assertEqual(response.status_code, 200, response.content[:400])
+        body = response.json()
+        self.assertTrue(body["signIn"]["idleTimeout"])
+        self.assertTrue(body["signIn"]["absoluteTimeout"])
+        self.assertTrue(body["generation"]["modelName"])
+        self.assertIn("capUsd", body["spend"])

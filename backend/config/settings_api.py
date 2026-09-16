@@ -37,11 +37,15 @@ EFFORT_NOTES = {
 }
 
 
-def _hours(value: int) -> str:
-    if value % 24 == 0 and value >= 24:
-        days = value // 24
+def _duration(seconds: int) -> str:
+    """Seconds as a person would say them. Django stores both timeouts in
+    seconds — there is no hours setting to read, which is how this went wrong
+    the first time."""
+    hours = max(1, round(seconds / 3600))
+    if hours % 24 == 0:
+        days = hours // 24
         return f"{days} day{'s' if days != 1 else ''}"
-    return f"{value} hour{'s' if value != 1 else ''}"
+    return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
 class ExportDefaultsSerializer(serializers.Serializer):
@@ -96,8 +100,8 @@ def workspace_settings(request: Request) -> Response:
             "signIn": {
                 "allowedEmailDomains": domains,
                 # Phrased, not raw: "12 hours" reads; 43200 does not.
-                "idleTimeout": _hours(settings.SESSION_IDLE_TIMEOUT_HOURS),
-                "absoluteTimeout": _hours(settings.SESSION_ABSOLUTE_TIMEOUT_HOURS),
+                "idleTimeout": _duration(settings.SESSION_COOKIE_AGE),
+                "absoluteTimeout": _duration(settings.SESSION_ABSOLUTE_TIMEOUT),
                 "magicLinkMinutes": settings.MAGIC_LINK_TTL_MINUTES,
             },
             "exportDefaults": _export_defaults(request.user),
