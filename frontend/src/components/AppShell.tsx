@@ -2,9 +2,9 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 import { useAuth } from '../auth/AuthContext'
-import { runsApi, type Spend } from '../lib/api'
+import { runsApi, type SetupState, type Spend } from '../lib/api'
 import { Button } from './Button'
-import { BrandMark, BranchIcon, GearIcon, PlayIcon, PlugIcon, TagIcon } from './icons'
+import { BrandMark, BranchIcon, CheckIcon, GearIcon, PlayIcon, PlugIcon, TagIcon } from './icons'
 
 type NavItem = {
   key: string
@@ -44,7 +44,12 @@ function navItems(runs: RunsState): NavItem[] {
   ]
 }
 
-type RunsState = { latestId: number | null; activeCount: number; spend: Spend | null }
+type RunsState = {
+  latestId: number | null
+  activeCount: number
+  spend: Spend | null
+  setup: SetupState | null
+}
 
 /** Chrome for the signed-in product screens (04 onward). */
 export function AppShell({
@@ -69,7 +74,12 @@ export function AppShell({
 }) {
   const { user, signOut } = useAuth()
   const { pathname } = useLocation()
-  const [runs, setRuns] = useState<RunsState>({ latestId: null, activeCount: 0, spend: null })
+  const [runs, setRuns] = useState<RunsState>({
+    latestId: null,
+    activeCount: 0,
+    spend: null,
+    setup: null,
+  })
 
   // Once per screen, from our own API — the badge is a hint, not a live feed,
   // so it does not poll. The run page itself polls its own run.
@@ -77,8 +87,8 @@ export function AppShell({
     let cancelled = false
     runsApi
       .list()
-      .then(({ runs: list, activeCount, spend }) => {
-        if (!cancelled) setRuns({ latestId: list[0]?.id ?? null, activeCount, spend })
+      .then(({ runs: list, activeCount, spend, setup }) => {
+        if (!cancelled) setRuns({ latestId: list[0]?.id ?? null, activeCount, spend, setup })
       })
       .catch(() => undefined)
     return () => {
@@ -134,6 +144,7 @@ export function AppShell({
 
         <div className="flex-1" />
 
+        {runs.setup && !runs.setup.complete && <SetupPanel setup={runs.setup} />}
         {runs.spend && <SpendPanel spend={runs.spend} />}
 
         <div className="flex items-center gap-2.5 border-t border-edge px-4 py-3">
@@ -200,6 +211,57 @@ function SpendPanel({ spend }: { spend: Spend }) {
           Cap reached — new runs are refused until next month, or until the cap is raised.
         </p>
       )}
+    </div>
+  )
+}
+
+/** What is still missing before the tool can do its job. Disappears for good
+ *  once the workspace is connected and a first run exists — a permanent
+ *  checklist of things already done is just noise in the rail. */
+function SetupPanel({ setup }: { setup: SetupState }) {
+  const steps = [
+    {
+      key: 'linear',
+      label: 'Connect Linear',
+      to: '/connections',
+      done: setup.linearConnected && setup.teamsSelected > 0,
+    },
+    {
+      key: 'repo',
+      label: 'Connect a repository',
+      to: '/repositories',
+      done: setup.sourceConnected && setup.repositoriesSelected > 0,
+    },
+    { key: 'run', label: 'Run your first ticket', to: '/tickets', done: setup.hasRun },
+  ]
+  const done = steps.filter((step) => step.done).length
+
+  return (
+    <div className="mx-3.5 mb-3 rounded-lg border border-edge bg-ink-800 p-3">
+      <p className="label-micro mb-2.5">
+        Setup · {done} of {steps.length}
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {steps.map((step) => (
+          <li key={step.key}>
+            <Link
+              to={step.to}
+              className={`flex items-center gap-2 rounded px-1 py-0.5 text-[12px] no-underline transition-colors ${
+                step.done ? 'text-fg-faint hover:text-fg-dim' : 'text-fg-muted hover:text-fg'
+              }`}
+            >
+              <span
+                className={`flex size-3.75 shrink-0 items-center justify-center rounded-full border ${
+                  step.done ? 'border-signal-edge bg-signal-bg' : 'border-edge-strong'
+                }`}
+              >
+                {step.done && <CheckIcon size={8} className="text-signal" />}
+              </span>
+              <span className={step.done ? 'line-through decoration-fg-ghost' : ''}>{step.label}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

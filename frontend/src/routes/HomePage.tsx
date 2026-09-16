@@ -1,100 +1,160 @@
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
 
+import { AppShell } from '../components/AppShell'
 import { Button } from '../components/Button'
-import { BrandMark, CheckIcon } from '../components/icons'
 import { useAuth } from '../auth/AuthContext'
-
-/** The screens from the design canvas, in build order. */
-const ROADMAP: { n: string; name: string; done: boolean; to?: string }[] = [
-  { n: '01', name: 'Sign in', done: true },
-  { n: '02', name: 'Connect Linear', done: true, to: '/setup/project-management' },
-  { n: '03', name: 'Connect repository', done: true, to: '/setup/source-code' },
-  { n: '04', name: 'Pick a ticket', done: true, to: '/tickets' },
-  { n: '05', name: 'Generation run', done: true, to: '/tickets' },
-  { n: '06', name: 'Review workspace', done: false },
-  { n: '07', name: 'Export CSV / Markdown', done: false },
-]
+import { ArrowRightIcon, CheckIcon, SpinnerIcon } from '../components/icons'
+import { ApiError, runsApi, type SetupState } from '../lib/api'
 
 /**
- * Placeholder landing spot for a signed-in user.
- *
- * Deliberately not a mock dashboard — it exists so the sign-in flow has
- * somewhere real to land, and it is replaced by screen 04 when that is built.
+ * The front door. Somebody who has finished setting up wants the dashboard,
+ * not a welcome page, so this only ever renders while something is missing.
  */
 export function HomePage() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
+  const [setup, setSetup] = useState<SetupState | null>(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    runsApi
+      .list({ limit: 1 })
+      .then(({ setup: state }) => !cancelled && setSetup(state))
+      .catch((err) =>
+        !cancelled && setError(err instanceof ApiError ? err.message : 'Could not reach QA Agent.'),
+      )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (setup?.ready) return <Navigate to="/runs" replace />
+
+  if (!setup) {
+    return (
+      <AppShell title="QA Agent">
+        <div className="flex flex-1 items-center justify-center gap-3 text-fg-faint">
+          {error ? (
+            <span className="text-[13px] text-danger">{error}</span>
+          ) : (
+            <>
+              <SpinnerIcon size={18} />
+              <span className="text-[13px]">Loading…</span>
+            </>
+          )}
+        </div>
+      </AppShell>
+    )
+  }
+
+  const steps = [
+    {
+      key: 'linear',
+      title: 'Connect Linear',
+      note: 'Where the tickets come from — description, acceptance criteria, sub-issues and comments.',
+      to: '/setup/project-management',
+      cta: 'Connect Linear',
+      done: setup.linearConnected && setup.teamsSelected > 0,
+      detail: setup.linearConnected
+        ? setup.teamsSelected > 0
+          ? `${setup.teamsSelected} team${setup.teamsSelected === 1 ? '' : 's'} syncing`
+          : 'Connected, but no team is syncing yet'
+        : '',
+    },
+    {
+      key: 'repo',
+      title: 'Connect a repository',
+      note: 'Where the code comes from. A run reads the diff that implements the ticket.',
+      to: '/setup/source-code',
+      cta: 'Connect Azure DevOps',
+      done: setup.sourceConnected && setup.repositoriesSelected > 0,
+      detail: setup.sourceConnected
+        ? setup.repositoriesSelected > 0
+          ? `${setup.repositoriesSelected} repositor${setup.repositoriesSelected === 1 ? 'y' : 'ies'} in scope`
+          : 'Connected, but no repository is in scope yet'
+        : '',
+    },
+    {
+      key: 'run',
+      title: 'Run your first ticket',
+      note: 'Pick a ticket and QA Agent writes the manual test cases for the change behind it.',
+      to: '/tickets',
+      cta: 'Pick a ticket',
+      done: setup.hasRun,
+      detail: '',
+    },
+  ]
+  const next = steps.find((step) => !step.done)
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="flex h-13 shrink-0 items-center gap-3 border-b border-edge px-5">
-        <BrandMark size={26} />
-        <span className="font-display text-sm font-bold">QA Agent</span>
-        <span className="rounded-[3px] border border-edge-strong px-1.5 py-px font-mono text-[9px] text-fg-faint">
-          v0.1
-        </span>
-        <div className="flex-1" />
-        {user && (
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-6.5 items-center justify-center rounded-md bg-signal-bg-strong font-mono text-[10px] text-signal">
-              {user.initials}
-            </span>
-            <span className="hidden font-mono text-[11px] text-fg-dim sm:inline">{user.email}</span>
-          </div>
-        )}
-        <Button variant="ghost" onClick={() => void signOut()}>
-          Sign out
-        </Button>
-      </header>
+    <AppShell title="QA Agent">
+      <div className="flex flex-1 items-start justify-center px-5 py-10">
+        <div className="w-full max-w-160">
+          <p className="label-micro mb-2.5">Getting started</p>
+          <h1 className="mb-2 font-display text-[28px] leading-tight font-semibold text-fg-bright">
+            Welcome, {user?.displayName ?? 'there'}
+          </h1>
+          <p className="mb-7 text-[13.5px] text-fg-dimmer text-pretty">
+            QA Agent turns a ticket and the code that implements it into manual test cases you review.
+            Two connections and it is ready.
+          </p>
 
-      <main className="mx-auto w-full max-w-[640px] px-5 py-16">
-        <p className="label-micro mb-3">Signed in</p>
-        <h1 className="mb-2 font-display text-[26px] font-semibold text-fg-bright">
-          Welcome, {user?.displayName}
-        </h1>
-        <p className="mb-10 text-[13.5px] text-fg-dimmer text-pretty">
-          Screen 01 is wired end to end. The rest of the Phase 1 flow is drawn in the design canvas
-          and lands here as it gets built.
-        </p>
-
-        <ol className="divide-y divide-edge overflow-hidden rounded-lg border border-edge bg-ink-800">
-          {ROADMAP.map((step) => {
-            const row = (
-              <>
+          <ul className="mb-6 flex flex-col gap-2">
+            {steps.map((step, index) => (
+              <li
+                key={step.key}
+                className={`flex items-start gap-3.5 rounded-[10px] border px-4 py-3.5 ${
+                  step.done
+                    ? 'border-edge bg-ink-800'
+                    : step.key === next?.key
+                      ? 'border-signal-edge bg-[#121710]'
+                      : 'border-edge bg-ink-800'
+                }`}
+              >
                 <span
-                  className={`flex size-5 shrink-0 items-center justify-center rounded-full border ${
-                    step.done
-                      ? 'border-signal-edge bg-signal-bg text-signal'
-                      : 'border-edge-strong text-fg-ghost'
+                  className={`mt-0.5 flex size-5.5 shrink-0 items-center justify-center rounded-full border ${
+                    step.done ? 'border-signal-edge bg-signal-bg' : 'border-edge-strong'
                   }`}
                 >
-                  {step.done ? <CheckIcon size={11} /> : <span className="size-1 rounded-full bg-current" />}
+                  {step.done ? (
+                    <CheckIcon size={11} className="text-signal" />
+                  ) : (
+                    <span className="font-mono text-[10px] text-fg-faint">{index + 1}</span>
+                  )}
                 </span>
-                <span className="font-mono text-[11px] text-fg-ghost">{step.n}</span>
-                <span className={`flex-1 text-[13px] ${step.done ? 'text-fg-muted' : 'text-fg-faint'}`}>
-                  {step.name}
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-[13.5px] font-medium ${step.done ? 'text-fg-dim' : 'text-fg'}`}>
+                    {step.title}
+                  </span>
+                  <span className="block text-[12.5px] text-fg-dimmer text-pretty">{step.note}</span>
+                  {step.detail && (
+                    <span className="mt-1 block font-mono text-[11px] text-fg-faint">{step.detail}</span>
+                  )}
                 </span>
-                <span className="font-mono text-[10.5px] text-fg-faint">
-                  {step.to ? 'open →' : step.done ? 'built' : 'designed'}
-                </span>
-              </>
-            )
-            return (
-              <li key={step.n}>
-                {step.to ? (
-                  <Link
-                    to={step.to}
-                    className="flex items-center gap-3.5 px-4 py-3 no-underline transition-colors hover:bg-ink-700"
-                  >
-                    {row}
-                  </Link>
+                {step.done ? (
+                  <span className="shrink-0 self-center font-mono text-[11px] text-signal-dim">done</span>
                 ) : (
-                  <div className="flex items-center gap-3.5 px-4 py-3">{row}</div>
+                  <Link to={step.to} className="shrink-0 self-center no-underline">
+                    <Button
+                      variant={step.key === next?.key ? 'primary' : 'secondary'}
+                      className="h-control-sm px-3 text-[12px]"
+                      icon={<ArrowRightIcon size={13} />}
+                    >
+                      {step.cta}
+                    </Button>
+                  </Link>
                 )}
               </li>
-            )
-          })}
-        </ol>
-      </main>
-    </div>
+            ))}
+          </ul>
+
+          <p className="text-[12px] text-fg-faint text-pretty">
+            Both connections are shared by the whole workspace, so this is done once for everybody — not
+            once per person.
+          </p>
+        </div>
+      </div>
+    </AppShell>
   )
 }

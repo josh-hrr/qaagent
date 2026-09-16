@@ -410,6 +410,19 @@ export type RunListParams = {
   offset?: number
 }
 
+/** How far this workspace got through first-run setup. */
+export type SetupState = {
+  linearConnected: boolean
+  teamsSelected: number
+  sourceConnected: boolean
+  repositoriesSelected: number
+  hasRun: boolean
+  /** Everything a run needs is connected. */
+  ready: boolean
+  /** Ready, and at least one run has been started. */
+  complete: boolean
+}
+
 export type RunListResponse = {
   runs: RunSummary[]
   total: number
@@ -418,6 +431,7 @@ export type RunListResponse = {
   counts: Record<string, number>
   activeCount: number
   spend: Spend
+  setup: SetupState
 }
 
 export const runsApi = {

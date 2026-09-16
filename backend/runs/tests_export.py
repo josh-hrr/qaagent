@@ -342,3 +342,58 @@ class UntickedPullRequestTests(TestCase):
         reader.pull_request.assert_not_called()
         self.assertEqual(run.error_code, "no_usable_pull_request")
         self.assertEqual(run.skipped_pull_requests[0]["reason"], "unticked before the run")
+
+
+class SetupStateTests(TestCase):
+    """The rail checklist and the front door both read this."""
+
+    def setUp(self):
+        self.client.force_login(User.objects.create_user("dev@example.com"))
+
+    def state(self) -> dict:
+        return self.client.get(reverse("runs:list")).json()["setup"]
+
+    def test_nothing_connected(self):
+        state = self.state()
+        self.assertFalse(state["ready"])
+        self.assertFalse(state["complete"])
+        self.assertEqual(state["teamsSelected"], 0)
+
+    def test_connected_but_nothing_selected_is_not_ready(self):
+        from connections.models import Connection, LinearTeam, Provider, Repository
+
+        with override_settings(CREDENTIAL_ENCRYPTION_KEY="zqLxwEdiY2j8ta4ERsIrf2UPQgDSmRnRm6ZvCk5p_74="):
+            linear = Connection.objects.create(provider=Provider.LINEAR)
+            linear.set_credential("lin_api_x")
+            linear.save()
+            azure = Connection.objects.create(provider=Provider.AZURE_DEVOPS)
+            azure.set_credential("pat")
+            azure.save()
+        LinearTeam.objects.create(connection=linear, linear_id="t", key="TES", name="T", selected=False)
+        Repository.objects.create(connection=azure, external_id="r", name="core-api", selected=False)
+
+        state = self.state()
+        self.assertTrue(state["linearConnected"])
+        self.assertTrue(state["sourceConnected"])
+        # Connected is not the same as usable: a run needs something in scope.
+        self.assertFalse(state["ready"])
+
+    def test_ready_once_a_team_and_a_repository_are_in_scope(self):
+        from connections.models import Connection, LinearTeam, Provider, Repository
+
+        with override_settings(CREDENTIAL_ENCRYPTION_KEY="zqLxwEdiY2j8ta4ERsIrf2UPQgDSmRnRm6ZvCk5p_74="):
+            linear = Connection.objects.create(provider=Provider.LINEAR)
+            linear.set_credential("lin_api_x")
+            linear.save()
+            azure = Connection.objects.create(provider=Provider.AZURE_DEVOPS)
+            azure.set_credential("pat")
+            azure.save()
+        LinearTeam.objects.create(connection=linear, linear_id="t", key="TES", name="T", selected=True)
+        Repository.objects.create(connection=azure, external_id="r", name="core-api", selected=True)
+
+        state = self.state()
+        self.assertTrue(state["ready"])
+        self.assertFalse(state["complete"])  # no run yet
+
+        Run.objects.create(ticket_linear_id="lin_1", status=RunStatus.SUCCEEDED)
+        self.assertTrue(self.state()["complete"])

@@ -15,6 +15,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from connections.models import Connection, Provider
+
 from .models import STAGE_ORDER, TERMINAL_STATUSES, Run, RunStatus, Stage
 from .tasks import execute_run
 
@@ -70,6 +72,30 @@ def monthly_spend() -> dict:
         "runCount": month.count(),
         "model": settings.LLM_MODEL,
         "capReached": cap > 0 and spent >= cap,
+    }
+
+
+def setup_state() -> dict:
+    """How far this workspace got through first-run setup.
+
+    Rides along with the run list because the shell already asks for that on
+    every screen, and one request beats two for something drawn in the rail.
+    """
+    linear = Connection.objects.filter(provider=Provider.LINEAR).first()
+    source = Connection.objects.filter(provider=Provider.AZURE_DEVOPS).first()
+    teams = linear.linear_teams.filter(selected=True).count() if linear else 0
+    repositories = source.repositories.filter(selected=True).count() if source else 0
+    has_run = Run.objects.exists()
+    return {
+        "linearConnected": bool(linear),
+        "teamsSelected": teams,
+        "sourceConnected": bool(source),
+        "repositoriesSelected": repositories,
+        "hasRun": has_run,
+        # "Ready to use", not "perfect": a first run is the proof it works, but
+        # it is not something to block the product on.
+        "ready": bool(linear and teams and source and repositories),
+        "complete": bool(linear and teams and source and repositories and has_run),
     }
 
 
@@ -266,5 +292,6 @@ def list_runs(request: Request) -> Response:
             # For the "N live" badge in the navigation rail.
             "activeCount": Run.objects.exclude(status__in=TERMINAL_STATUSES).count(),
             "spend": monthly_spend(),
+            "setup": setup_state(),
         }
     )
