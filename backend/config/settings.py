@@ -19,6 +19,7 @@ env = environ.Env(
     DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     # Turn on only when a load balancer or reverse proxy sets X-Forwarded-Proto.
     TRUST_PROXY_SSL_HEADER=(bool, False),
+    DJANGO_SECURE_SSL_REDIRECT=(bool, True),
     FRONTEND_ORIGIN=(str, "http://localhost:5173"),
     FRONTEND_URL=(str, "http://localhost:5173"),
     # Sessions: idle expiry slides with activity, the absolute cap does not.
@@ -56,6 +57,11 @@ environ.Env.read_env(BASE_DIR / ".env")
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-only-insecure-key-change-me")
 DEBUG = env("DJANGO_DEBUG")
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
+# Render sets RENDER_EXTERNAL_HOSTNAME on every service; adding it here means
+# the host list does not have to be edited on each deploy.
+_render_host = env("RENDER_EXTERNAL_HOSTNAME", default="")
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_render_host)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -75,6 +81,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Serves the built SPA and the admin's own files. Directly after the
+    # security middleware is where WhiteNoise expects to sit.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -88,10 +97,14 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "config.urls"
 
+# The built frontend. Vite writes index.html here, and its asset URLs are
+# rewritten to /static/ at build time so WhiteNoise can serve them.
+FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [BASE_DIR / "templates", FRONTEND_DIST],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -129,6 +142,22 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Vite's output, collected alongside Django's own static files.
+# Kept under an "assets" prefix so the collected paths match the URLs Vite
+# wrote into index.html (/static/assets/...), rather than landing at the root.
+STATICFILES_DIRS = [("assets", FRONTEND_DIST / "assets")] if (FRONTEND_DIST / "assets").is_dir() else []
+
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        # Hashed names plus long-lived caching, and it will not fail the whole
+        # deploy over one unreferenced file.
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        if not DEBUG
+        else "django.contrib.staticfiles.storage.StaticFilesStorage"
+    },
+}
+WHITENOISE_MANIFEST_STRICT = False
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- API -------------------------------------------------------------------
@@ -175,6 +204,8 @@ CSRF_COOKIE_HTTPONLY = False  # the SPA reads it to echo in the X-CSRFToken head
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = [env("FRONTEND_ORIGIN")]
+if _render_host:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_render_host}")
 
 # In development the Vite dev server proxies /api to Django, so requests are
 # same-origin and CORS is not exercised. It stays configured for setups that
@@ -188,7 +219,9 @@ X_FRAME_OPTIONS = "DENY"
 
 # HTTPS. The __Host- cookie prefix already requires TLS everywhere outside
 # development, so these only make that explicit.
-SECURE_SSL_REDIRECT = not DEBUG
+# On by default outside development. Configurable because some platforms
+# redirect at the edge, and because a local production smoke test needs it off.
+SECURE_SSL_REDIRECT = env("DJANGO_SECURE_SSL_REDIRECT", default=not DEBUG)
 SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000  # one year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
 # Preload is deliberately off: submitting to the browser preload list is

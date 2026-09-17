@@ -52,7 +52,10 @@ function contentSecurityPolicy(): Plugin {
 // The dev server proxies /api to Django so the SPA and the API share an origin.
 // That keeps the session cookie a plain first-party cookie — no CORS, no
 // SameSite surprises, and the same shape as production behind one domain.
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Django collects the build into /static/, so the asset URLs have to match.
+  // The dev server keeps the root base, where Vite serves them itself.
+  base: command === 'build' ? '/static/' : '/',
   plugins: [react(), tailwindcss(), contentSecurityPolicy()],
   server: {
     port: 5173,
@@ -63,4 +66,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

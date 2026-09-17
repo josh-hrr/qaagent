@@ -1,55 +1,78 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
 
-import { useAuth } from '../auth/AuthContext'
-import { runsApi, type SetupState, type Spend } from '../lib/api'
-import { Button } from './Button'
-import { BrandMark, BranchIcon, CheckIcon, GearIcon, PlayIcon, PlugIcon, TagIcon } from './icons'
+import { useAuth } from "../auth/AuthContext";
+import { runsApi, type SetupState, type Spend } from "../lib/api";
+import { Button } from "./Button";
+import {
+  BrandMark,
+  BranchIcon,
+  CheckIcon,
+  GearIcon,
+  PlayIcon,
+  PlugIcon,
+  TagIcon,
+} from "./icons";
 
 type NavItem = {
-  key: string
-  label: string
-  icon: ReactNode
-  to?: string
+  key: string;
+  label: string;
+  icon: ReactNode;
+  to?: string;
   /** Matches the current path when it differs from `to`. */
-  activePrefix?: string
-  badge?: string
+  activePrefix?: string;
+  badge?: string;
   /** Built, but nothing to open yet — muted without a "soon" label. */
-  empty?: boolean
-}
+  empty?: boolean;
+};
 
 /** Items without a `to` are drawn muted — the screen does not exist yet, and
  *  a dead link is worse than a visible gap. */
 function navItems(runs: RunsState): NavItem[] {
   return [
     {
-      key: 'runs',
-      label: 'Runs',
+      key: "runs",
+      label: "Runs",
       icon: <PlayIcon size={16} />,
-      to: '/runs',
-      activePrefix: '/runs',
+      to: "/runs",
+      activePrefix: "/runs",
       badge: runs.activeCount > 0 ? `${runs.activeCount} live` : undefined,
     },
-    { key: 'tickets', label: 'Tickets', icon: <TagIcon size={16} />, to: '/tickets' },
+    {
+      key: "tickets",
+      label: "Tickets",
+      icon: <TagIcon size={16} />,
+      to: "/tickets",
+    },
     // The managed screens, not the first-run wizard: landing back in onboarding
     // to check a token is disorienting.
-    { key: 'repos', label: 'Repositories', icon: <BranchIcon size={16} />, to: '/repositories' },
     {
-      key: 'connections',
-      label: 'Connections',
-      icon: <PlugIcon size={16} />,
-      to: '/connections',
+      key: "repos",
+      label: "Repositories",
+      icon: <BranchIcon size={16} />,
+      to: "/repositories",
     },
-    { key: 'settings', label: 'Settings', icon: <GearIcon size={16} />, to: '/settings' },
-  ]
+    {
+      key: "connections",
+      label: "Connections",
+      icon: <PlugIcon size={16} />,
+      to: "/connections",
+    },
+    {
+      key: "settings",
+      label: "Settings",
+      icon: <GearIcon size={16} />,
+      to: "/settings",
+    },
+  ];
 }
 
 type RunsState = {
-  latestId: number | null
-  activeCount: number
-  spend: Spend | null
-  setup: SetupState | null
-}
+  latestId: number | null;
+  activeCount: number;
+  spend: Spend | null;
+  setup: SetupState | null;
+};
 
 /** Chrome for the signed-in product screens (04 onward). */
 export function AppShell({
@@ -61,43 +84,46 @@ export function AppShell({
   children,
 }: {
   /** Omit for a breadcrumb-only header (pass the breadcrumb as `subtitle`). */
-  title?: string
-  subtitle?: ReactNode
-  actions?: ReactNode
+  title?: string;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
   /** A full-height side panel. The header stops at its edge, as in the design,
    *  instead of stretching over it. */
-  aside?: ReactNode
+  aside?: ReactNode;
   /** Lock the page to the viewport on wide screens, so panels scroll inside
    *  it instead of the whole page. */
-  fill?: boolean
-  children: ReactNode
+  fill?: boolean;
+  children: ReactNode;
 }) {
-  const { user, signOut } = useAuth()
-  const { pathname } = useLocation()
+  const { user, signOut } = useAuth();
+  const { pathname } = useLocation();
   const [runs, setRuns] = useState<RunsState>({
     latestId: null,
     activeCount: 0,
     spend: null,
     setup: null,
-  })
+  });
 
   // Once per screen, from our own API — the badge is a hint, not a live feed,
   // so it does not poll. The run page itself polls its own run.
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     runsApi
       .list()
       .then(({ runs: list, activeCount, spend, setup }) => {
-        if (!cancelled) setRuns({ latestId: list[0]?.id ?? null, activeCount, spend, setup })
+        if (!cancelled)
+          setRuns({ latestId: list[0]?.id ?? null, activeCount, spend, setup });
       })
-      .catch(() => undefined)
+      .catch(() => undefined);
     return () => {
-      cancelled = true
-    }
-  }, [pathname])
+      cancelled = true;
+    };
+  }, [pathname]);
 
   return (
-    <div className={`flex min-h-dvh ${fill ? 'xl:h-dvh xl:overflow-hidden' : ''}`}>
+    <div
+      className={`flex min-h-dvh ${fill ? "xl:h-dvh xl:overflow-hidden" : ""}`}
+    >
       <aside className="sticky top-0 hidden h-dvh w-59 shrink-0 flex-col self-start border-r border-edge lg:flex">
         <div className="flex items-center gap-2.5 px-4.5 py-4.5">
           <BrandMark size={26} />
@@ -110,41 +136,53 @@ export function AppShell({
         <nav className="flex flex-col gap-0.5 px-2.5">
           {navItems(runs).map((item) => {
             const active =
-              (item.activePrefix !== undefined && pathname.startsWith(item.activePrefix)) ||
-              (item.to !== undefined && pathname.startsWith(item.to))
+              (item.activePrefix !== undefined &&
+                pathname.startsWith(item.activePrefix)) ||
+              (item.to !== undefined && pathname.startsWith(item.to));
             const className = `flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] ${
               active
-                ? 'bg-ink-500 font-medium text-fg'
+                ? "bg-ink-500 font-medium text-fg"
                 : item.to
-                  ? 'text-fg-dimmer hover:bg-ink-800 hover:text-fg-muted'
-                  : 'cursor-default text-fg-ghost'
-            }`
+                  ? "text-fg-dimmer hover:bg-ink-800 hover:text-fg-muted"
+                  : "cursor-default text-fg-ghost"
+            }`;
             const inner = (
               <>
                 {item.icon}
                 <span className="flex-1">{item.label}</span>
                 {item.badge ? (
-                  <span className="font-mono text-[10px] text-signal">{item.badge}</span>
+                  <span className="font-mono text-[10px] text-signal">
+                    {item.badge}
+                  </span>
                 ) : (
-                  !item.to && !item.empty && <span className="font-mono text-[9.5px]">soon</span>
+                  !item.to &&
+                  !item.empty && (
+                    <span className="font-mono text-[9.5px]">soon</span>
+                  )
                 )}
               </>
-            )
+            );
             return item.to ? (
-              <Link key={item.key} to={item.to} className={`${className} no-underline`}>
+              <Link
+                key={item.key}
+                to={item.to}
+                className={`${className} no-underline`}
+              >
                 {inner}
               </Link>
             ) : (
               <span key={item.key} className={className} aria-disabled="true">
                 {inner}
               </span>
-            )
+            );
           })}
         </nav>
 
         <div className="flex-1" />
 
-        {runs.setup && !runs.setup.complete && <SetupPanel setup={runs.setup} />}
+        {runs.setup && !runs.setup.complete && (
+          <SetupPanel setup={runs.setup} />
+        )}
         {runs.spend && <SpendPanel spend={runs.spend} />}
 
         <div className="flex items-center gap-2.5 border-t border-edge px-4 py-3">
@@ -163,7 +201,11 @@ export function AppShell({
               </span>
             </>
           )}
-          <Button variant="ghost" onClick={() => void signOut()} className="shrink-0 px-2">
+          <Button
+            variant="ghost"
+            onClick={() => void signOut()}
+            className="shrink-0 px-2"
+          >
             Sign out
           </Button>
         </div>
@@ -172,8 +214,16 @@ export function AppShell({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col xl:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 flex h-13 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge bg-ink-900 px-5">
-            {title && <h1 className="font-display text-[15px] font-semibold">{title}</h1>}
-            {subtitle && <div className="font-mono text-[11px] text-fg-faint">{subtitle}</div>}
+            {title && (
+              <h1 className="font-display text-[15px] font-semibold">
+                {title}
+              </h1>
+            )}
+            {subtitle && (
+              <div className="font-mono text-[11px] text-fg-faint">
+                {subtitle}
+              </div>
+            )}
             <div className="flex-1" />
             {actions}
           </header>
@@ -182,37 +232,49 @@ export function AppShell({
         {aside}
       </div>
     </div>
-  )
+  );
 }
 
 /** What the workspace has spent this month. A cap that is invisible until it
  *  bites is a cap that surprises somebody mid-sprint. */
 function SpendPanel({ spend }: { spend: Spend }) {
-  const spent = Number(spend.spentUsd)
-  const cap = Number(spend.capUsd)
-  const fraction = cap > 0 ? Math.min(1, spent / cap) : 0
-  const bar = spend.capReached ? 'bg-danger' : fraction > 0.8 ? 'bg-warn' : 'bg-signal'
+  const spent = Number(spend.spentUsd);
+  const cap = Number(spend.capUsd);
+  const fraction = cap > 0 ? Math.min(1, spent / cap) : 0;
+  const bar = spend.capReached
+    ? "bg-danger"
+    : fraction > 0.8
+      ? "bg-warn"
+      : "bg-signal";
 
   return (
     <div className="mx-3.5 mb-3 rounded-lg border border-edge bg-ink-800 p-3">
       <p className="label-micro mb-2">Spend this month</p>
       <p className="mb-2.25 flex items-baseline gap-1.5">
-        <span className="font-display text-[19px] font-semibold text-fg">${spent.toFixed(2)}</span>
-        <span className="font-mono text-[10px] text-fg-faint">/ ${cap.toFixed(0)} cap</span>
+        <span className="font-display text-[19px] font-semibold text-fg">
+          ${spent.toFixed(2)}
+        </span>
+        <span className="font-mono text-[10px] text-fg-faint">
+          / ${cap.toFixed(0)} cap
+        </span>
       </p>
       <div className="h-0.75 overflow-hidden rounded-full bg-edge">
-        <div className={`h-0.75 ${bar}`} style={{ width: `${Math.round(fraction * 100)}%` }} />
+        <div
+          className={`h-0.75 ${bar}`}
+          style={{ width: `${Math.round(fraction * 100)}%` }}
+        />
       </div>
       <p className="mt-2 font-mono text-[10px] text-fg-faint">
-        {spend.model} · {spend.runCount} run{spend.runCount === 1 ? '' : 's'}
+        {spend.model} · {spend.runCount} run{spend.runCount === 1 ? "" : "s"}
       </p>
       {spend.capReached && (
         <p className="mt-1.5 text-[11px] text-danger text-pretty">
-          Cap reached — new runs are refused until next month, or until the cap is raised.
+          Cap reached — new runs are refused until next month, or until the cap
+          is raised.
         </p>
       )}
     </div>
-  )
+  );
 }
 
 /** What is still missing before the tool can do its job. Disappears for good
@@ -221,20 +283,25 @@ function SpendPanel({ spend }: { spend: Spend }) {
 function SetupPanel({ setup }: { setup: SetupState }) {
   const steps = [
     {
-      key: 'linear',
-      label: 'Connect Linear',
-      to: '/connections',
+      key: "linear",
+      label: "Connect Linear",
+      to: "/connections",
       done: setup.linearConnected && setup.teamsSelected > 0,
     },
     {
-      key: 'repo',
-      label: 'Connect a repository',
-      to: '/repositories',
+      key: "repo",
+      label: "Connect a repository",
+      to: "/repositories",
       done: setup.sourceConnected && setup.repositoriesSelected > 0,
     },
-    { key: 'run', label: 'Run your first ticket', to: '/tickets', done: setup.hasRun },
-  ]
-  const done = steps.filter((step) => step.done).length
+    {
+      key: "run",
+      label: "Run your first ticket",
+      to: "/tickets",
+      done: setup.hasRun,
+    },
+  ];
+  const done = steps.filter((step) => step.done).length;
 
   return (
     <div className="mx-3.5 mb-3 rounded-lg border border-edge bg-ink-800 p-3">
@@ -247,21 +314,29 @@ function SetupPanel({ setup }: { setup: SetupState }) {
             <Link
               to={step.to}
               className={`flex items-center gap-2 rounded px-1 py-0.5 text-[12px] no-underline transition-colors ${
-                step.done ? 'text-fg-faint hover:text-fg-dim' : 'text-fg-muted hover:text-fg'
+                step.done
+                  ? "text-fg-faint hover:text-fg-dim"
+                  : "text-fg-muted hover:text-fg"
               }`}
             >
               <span
                 className={`flex size-3.75 shrink-0 items-center justify-center rounded-full border ${
-                  step.done ? 'border-signal-edge bg-signal-bg' : 'border-edge-strong'
+                  step.done
+                    ? "border-signal-edge bg-signal-bg"
+                    : "border-edge-strong"
                 }`}
               >
                 {step.done && <CheckIcon size={8} className="text-signal" />}
               </span>
-              <span className={step.done ? 'line-through decoration-fg-ghost' : ''}>{step.label}</span>
+              <span
+                className={step.done ? "line-through decoration-fg-ghost" : ""}
+              >
+                {step.label}
+              </span>
             </Link>
           </li>
         ))}
       </ul>
     </div>
-  )
+  );
 }
