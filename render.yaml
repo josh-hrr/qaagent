@@ -1,30 +1,36 @@
-# Render blueprint: one web service, one worker, one database.
+# Render blueprint — free tier to start with.
 #
-# The web service serves the API *and* the built frontend, so the browser only
-# ever talks to one origin and the session cookie stays first-party.
+# One web service serves the API and the built frontend, so the browser talks
+# to a single origin and the session cookie stays first-party. The generation
+# worker runs inside that same service (render-start.sh), because Render has no
+# free background worker.
 #
-# The worker is separate because generation takes minutes: a request-scoped
-# process would be killed long before a run finishes. To save $7/month you can
-# delete the worker service and append `&& python manage.py db_worker &` to the
-# web start command — runs then only progress while the web service is awake,
-# which is a real trade, not a free one.
+# WHEN YOU UPGRADE (do this before the database's 30th day — see the README):
+#   1. Database: change `plan: free` to `plan: basic-256mb`. Upgrading in place
+#      keeps the data; there is also a 14-day grace period after expiry.
+#   2. Web: change `plan: free` to `plan: starter` so it stops sleeping.
+#   3. Worker: uncomment the service at the bottom and change the web service's
+#      startCommand to the gunicorn line from render-start.sh.
 
 databases:
   - name: qa-agent-db
     databaseName: qa_agent
     user: qa_agent
-    plan: basic-256mb # Free databases expire 30 days after creation.
+    # Free databases: 1 GB, no backups, and they EXPIRE 30 DAYS AFTER CREATION.
+    # `python manage.py backup_db --json` is the only safety net until this is
+    # on a paid plan.
+    plan: free
     postgresMajorVersion: "17"
 
 services:
   - type: web
     name: qa-agent
     runtime: python
-    plan: starter # Free instances sleep after 15 minutes; runs stall when they do.
+    plan: free # Sleeps after 15 minutes idle; ~1 minute to wake.
     region: oregon
     branch: main
     buildCommand: ./render-build.sh
-    startCommand: cd backend && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    startCommand: ./render-start.sh
     healthCheckPath: /api/auth/options/
     envVars:
       - key: PYTHON_VERSION
@@ -36,17 +42,17 @@ services:
       - key: DJANGO_DEBUG
         value: "false"
       - key: DJANGO_SECRET_KEY
-        generateValue: true # Render generates one and keeps it out of git.
+        generateValue: true # Render generates one; it never touches git.
       - key: CREDENTIAL_ENCRYPTION_KEY
-        sync: false # Paste your own: generate_encryption_key. Losing it means reconnecting.
+        sync: false # generate_encryption_key. Keep a copy — losing it means reconnecting.
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: EMAIL_URL
         sync: false # Resend: smtp://resend:<api-key>@smtp.resend.com:587/?tls=True
       - key: DEFAULT_FROM_EMAIL
-        sync: false # e.g. QA Agent <qa-agent@yourdomain.com> — must be a verified sender.
+        sync: false # A sender Resend has verified, e.g. QA Agent <qa@yourdomain.com>
       - key: ALLOWED_EMAIL_DOMAINS
-        sync: false # Who may sign in. Empty means anybody who can reach the URL.
+        sync: false # Who may sign in. Empty means anyone who finds the URL.
       - key: DJANGO_ALLOWED_HOSTS
         value: "localhost,127.0.0.1" # The Render hostname is added automatically.
       - key: TRUST_PROXY_SSL_HEADER
@@ -59,47 +65,43 @@ services:
         value: "1.00"
       - key: WORKSPACE_MONTHLY_CAP_USD
         value: "50"
-
-  - type: worker
-    name: qa-agent-worker
-    runtime: python
-    plan: starter
-    region: oregon
-    branch: main
-    buildCommand: ./render-build.sh --backend-only
-    # Anything left running by a previous deploy is failed before we start, so
-    # no run sits at "running" forever after a restart.
-    startCommand: cd backend && python manage.py reap_runs && python manage.py db_worker
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.7"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: qa-agent-db
-          property: connectionString
-      - key: DJANGO_DEBUG
-        value: "false"
-      # Must match the web service, or sessions and stored credentials break.
-      - key: DJANGO_SECRET_KEY
-        fromService:
-          type: web
-          name: qa-agent
-          envVarKey: DJANGO_SECRET_KEY
-      - key: CREDENTIAL_ENCRYPTION_KEY
-        sync: false
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: EMAIL_URL
-        sync: false
-      - key: DEFAULT_FROM_EMAIL
-        sync: false
-      - key: TRUST_PROXY_SSL_HEADER
-        value: "true"
-      - key: LLM_MODEL
-        value: claude-opus-5
-      - key: LLM_EFFORT
-        value: high
-      - key: RUN_COST_CAP_USD
-        value: "1.00"
-      - key: WORKSPACE_MONTHLY_CAP_USD
-        value: "50"
+# --- on a paid plan, the worker gets its own service -------------------------
+# - type: worker
+#   name: qa-agent-worker
+#   runtime: python
+#   plan: starter
+#   region: oregon
+#   branch: main
+#   buildCommand: ./render-build.sh --backend-only
+#   startCommand: cd backend && python manage.py reap_runs && python manage.py db_worker
+#   envVars:
+#     - key: PYTHON_VERSION
+#       value: "3.12.7"
+#     - key: DATABASE_URL
+#       fromDatabase:
+#         name: qa-agent-db
+#         property: connectionString
+#     - key: DJANGO_DEBUG
+#       value: "false"
+#     # Must match the web service, or sessions and stored credentials break.
+#     - key: DJANGO_SECRET_KEY
+#       fromService:
+#         type: web
+#         name: qa-agent
+#         envVarKey: DJANGO_SECRET_KEY
+#     - key: CREDENTIAL_ENCRYPTION_KEY
+#       sync: false
+#     - key: ANTHROPIC_API_KEY
+#       sync: false
+#     - key: EMAIL_URL
+#       sync: false
+#     - key: DEFAULT_FROM_EMAIL
+#       sync: false
+#     - key: LLM_MODEL
+#       value: claude-opus-5
+#     - key: LLM_EFFORT
+#       value: high
+#     - key: RUN_COST_CAP_USD
+#       value: "1.00"
+#     - key: WORKSPACE_MONTHLY_CAP_USD
+#       value: "50"

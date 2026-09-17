@@ -98,10 +98,26 @@ to a single origin and the session cookie stays first-party — no CORS, no
 because a run takes minutes and a request-scoped process would be killed first.
 
 ```
-Render web service  ──┐
-                      ├── Postgres (paid: the free one expires after 30 days)
-Render worker       ──┘
+Render web service ── Postgres
+  gunicorn + db_worker
 ```
+
+**Starting on the free tier**, which has three consequences worth knowing:
+
+| | Free | What it costs you |
+|---|---|---|
+| Database | 1 GB, **expires 30 days after creation**, no backups | `backup_db --json` is your only copy until you upgrade |
+| Web service | sleeps after 15 min idle, ~1 min to wake | a run in flight is killed; `reap_runs` fails it on the next start |
+| Worker | does not exist on free | it runs inside the web service, so it sleeps too |
+
+Watching a run keeps the service awake — the page polls every two seconds — so
+runs you start and watch normally finish. Runs you start and walk away from may
+not.
+
+**Before day 30**, change `plan: free` to `plan: basic-256mb` on the database in
+`render.yaml`. Upgrading in place keeps the data, and there is a 14-day grace
+period after expiry. Do it early; the metrics history is the thing you cannot
+regenerate.
 
 ### First deploy
 
@@ -153,9 +169,16 @@ silent for 30 minutes, and the worker runs it on start.
 
 ### Cost
 
-About **$21/month**: web $7, worker $7, Postgres $7, plus model spend (cents per
-run). Dropping the worker service saves $7 and costs reliability — runs then
-only progress while the web service is awake.
+Free to start. The upgrade ladder, in the order worth paying for:
+
+| Step | Adds | Monthly |
+|---|---|---|
+| Database → `basic-256mb` | history that does not expire, backups | $7 |
+| Web → `starter` | no sleeping, no killed runs | $14 |
+| Worker → own service | runs finish whether or not a browser is open | $21 |
+
+Model spend is separate and small — cents per run. The per-run and monthly caps
+in `/settings` bound it.
 
 ## Keeping the evidence
 

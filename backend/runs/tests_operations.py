@@ -133,3 +133,40 @@ class SinglePageAppTests(TestCase):
         # typo in a fetch looks like a parse error instead of a missing route.
         self.assertEqual(self.client.get("/api/does-not-exist/").status_code, 404)
         self.assertEqual(self.client.get(reverse("accounts:options")).status_code, 200)
+
+
+class BackupTests(TestCase):
+    """On the free Postgres plan this command is the only copy that exists."""
+
+    def setUp(self):
+        user = User.objects.create_user("dev@example.com")
+        run = Run.objects.create(
+            ticket_linear_id="lin_1", ticket_identifier="TES-8", status=RunStatus.SUCCEEDED, created_by=user
+        )
+        GeneratedCase.objects.create(run=run, number=1, title="Case one")
+
+    def test_json_backup_works_on_any_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            call_command("backup_db", to=directory, json=True, stdout=StringIO())
+            written = list(Path(directory).glob("qa-agent_*.json"))
+            self.assertEqual(len(written), 1)
+            payload = json.loads(written[0].read_text(encoding="utf-8"))
+
+        models = {row["model"] for row in payload}
+        self.assertIn("runs.run", models)
+        self.assertIn("runs.testcase", models)
+        # Rebuilt by migrate, and noise in a restore.
+        self.assertNotIn("contenttypes.contenttype", models)
+        self.assertNotIn("sessions.session", models)
+
+    def test_old_copies_are_pruned(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for index in range(3):
+                stale = Path(directory) / f"qa-agent_2026-01-0{index + 1}_1200.json"
+                stale.write_text("[]", encoding="utf-8")
+            call_command("backup_db", to=directory, json=True, keep=2, stdout=StringIO())
+            remaining = sorted(p.name for p in Path(directory).glob("qa-agent_*.json"))
+
+        self.assertEqual(len(remaining), 2)
+        # The newest survive; the oldest go.
+        self.assertNotIn("qa-agent_2026-01-01_1200.json", remaining)
