@@ -28,7 +28,11 @@ WORKER_PID=$!
 # healthy while no run can ever finish is worse than a restart.
 trap 'kill "$WORKER_PID" 2>/dev/null || true' EXIT
 
+# One worker: a free instance has 512 MB and is already running the
+# generation worker beside gunicorn. Two web workers plus the Anthropic SDK
+# is how you get an out-of-memory kill instead of a running service.
 exec gunicorn config.wsgi:application \
   --bind "0.0.0.0:$PORT" \
-  --workers 2 \
+  --workers 1 \
+  --threads 4 \
   --timeout 120
