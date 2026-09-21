@@ -6,7 +6,7 @@
 # free background worker.
 #
 # WHEN YOU UPGRADE (do this before the database's 30th day — see the README):
-#   1. Database: change `plan: free` to `plan: basic-256mb`. Upgrading in place
+#   1. Database: change `plan: free` to `plan: 0.1c-256mb`. Upgrading in place
 #      keeps the data; there is also a 14-day grace period after expiry.
 #   2. Web: change `plan: free` to `plan: starter` so it stops sleeping.
 #   3. Worker: uncomment the service at the bottom and change the web service's
@@ -29,12 +29,14 @@ services:
     plan: free # Sleeps after 15 minutes idle; ~1 minute to wake.
     region: oregon
     branch: main
-    buildCommand: ./render-build.sh
-    startCommand: ./render-start.sh
+    buildCommand: bash ./render-build.sh
+    startCommand: bash ./render-start.sh
     healthCheckPath: /api/auth/options/
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.7"
+      - key: NODE_VERSION
+        value: "22.11.0"
       - key: DATABASE_URL
         fromDatabase:
           name: qa-agent-db
@@ -72,7 +74,7 @@ services:
 #   plan: starter
 #   region: oregon
 #   branch: main
-#   buildCommand: ./render-build.sh --backend-only
+#   buildCommand: bash ./render-build.sh --backend-only
 #   startCommand: cd backend && python manage.py reap_runs && python manage.py db_worker
 #   envVars:
 #     - key: PYTHON_VERSION

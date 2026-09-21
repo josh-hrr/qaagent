@@ -114,7 +114,7 @@ Watching a run keeps the service awake — the page polls every two seconds — 
 runs you start and watch normally finish. Runs you start and walk away from may
 not.
 
-**Before day 30**, change `plan: free` to `plan: basic-256mb` on the database in
+**Before day 30**, change `plan: free` to `plan: 0.1c-256mb` on the database in
 `render.yaml`. Upgrading in place keeps the data, and there is a 14-day grace
 period after expiry. Do it early; the metrics history is the thing you cannot
 regenerate.
@@ -173,7 +173,7 @@ Free to start. The upgrade ladder, in the order worth paying for:
 
 | Step | Adds | Monthly |
 |---|---|---|
-| Database → `basic-256mb` | history that does not expire, backups | $7 |
+| Database → `0.1c-256mb` | history that does not expire, backups | $7 |
 | Web → `starter` | no sleeping, no killed runs | $14 |
 | Worker → own service | runs finish whether or not a browser is open | $21 |
 
