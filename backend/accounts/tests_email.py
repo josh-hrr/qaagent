@@ -89,3 +89,17 @@ class ConsoleBackendStillWorksTests(TestCase):
     def test_no_key_means_the_configured_backend_is_untouched(self):
         send_mail("S", "B", "from@example.com", ["dev@example.com"])
         self.assertEqual(len(mail.outbox), 1)
+
+
+class MagicLinkAddressTests(TestCase):
+    """The link has to point at the site the person is actually using."""
+
+    @override_settings(FRONTEND_URL="https://qa-agent.example.com")
+    def test_the_link_uses_the_deployed_address(self):
+        from accounts.services import send_magic_link
+
+        send_magic_link("dev@example.com")
+        body = mail.outbox[-1].body
+        self.assertIn("https://qa-agent.example.com/auth/magic-link?token=", body)
+        # The failure this guards against: a link into somebody's laptop.
+        self.assertNotIn("localhost", body)

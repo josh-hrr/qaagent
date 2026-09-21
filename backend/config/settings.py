@@ -20,8 +20,6 @@ env = environ.Env(
     # Turn on only when a load balancer or reverse proxy sets X-Forwarded-Proto.
     TRUST_PROXY_SSL_HEADER=(bool, False),
     DJANGO_SECURE_SSL_REDIRECT=(bool, True),
-    FRONTEND_ORIGIN=(str, "http://localhost:5173"),
-    FRONTEND_URL=(str, "http://localhost:5173"),
     # Sessions: idle expiry slides with activity, the absolute cap does not.
     SESSION_IDLE_TIMEOUT_HOURS=(int, 12),
     SESSION_ABSOLUTE_TIMEOUT_HOURS=(int, 24 * 7),
@@ -66,6 +64,15 @@ ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 _render_host = env("RENDER_EXTERNAL_HOSTNAME", default="")
 if _render_host and _render_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_render_host)
+
+# Where the app is reached from. On Render the host is only known at deploy
+# time, so default to it rather than to localhost: a magic link that points at
+# a developer machine is useless to whoever received the email, and it is the
+# kind of mistake that only shows up in somebody else's inbox.
+_default_origin = f"https://{_render_host}" if _render_host else "http://localhost:5173"
+FRONTEND_ORIGIN = env("FRONTEND_ORIGIN", default=_default_origin)
+# Set FRONTEND_URL explicitly once there is a custom domain in front of this.
+FRONTEND_URL = env("FRONTEND_URL", default=FRONTEND_ORIGIN).rstrip("/")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -207,14 +214,14 @@ CSRF_COOKIE_NAME = f"{_HOST_PREFIX}qaagent_csrftoken"
 CSRF_COOKIE_HTTPONLY = False  # the SPA reads it to echo in the X-CSRFToken header
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = not DEBUG
-CSRF_TRUSTED_ORIGINS = [env("FRONTEND_ORIGIN")]
+CSRF_TRUSTED_ORIGINS = [FRONTEND_ORIGIN]
 if _render_host:
     CSRF_TRUSTED_ORIGINS.append(f"https://{_render_host}")
 
 # In development the Vite dev server proxies /api to Django, so requests are
 # same-origin and CORS is not exercised. It stays configured for setups that
 # serve the two apps from different hosts.
-CORS_ALLOWED_ORIGINS = [env("FRONTEND_ORIGIN")]
+CORS_ALLOWED_ORIGINS = [FRONTEND_ORIGIN]
 CORS_ALLOW_CREDENTIALS = True
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -273,7 +280,6 @@ DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="QA Agent <qa-agent@local
 
 # --- Sign-in policy --------------------------------------------------------
 
-FRONTEND_URL = env("FRONTEND_URL").rstrip("/")
 ALLOWED_EMAIL_DOMAINS = [d.lower().lstrip("@") for d in env("ALLOWED_EMAIL_DOMAINS") if d]
 MAGIC_LINK_TTL_MINUTES = env("MAGIC_LINK_TTL_MINUTES")
 MAGIC_LINK_MAX_PER_EMAIL_PER_HOUR = env("MAGIC_LINK_MAX_PER_EMAIL_PER_HOUR")
