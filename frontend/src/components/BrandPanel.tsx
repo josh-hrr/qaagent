@@ -50,7 +50,7 @@ export function BrandPanel() {
       <div className="relative flex items-center gap-3">
         <BrandMark size={30} />
         <span className="font-display text-base font-bold tracking-tight">
-          My Test Agent
+          QA Agent
         </span>
         <span className="rounded-[3px] border border-edge-strong px-1.5 py-0.5 font-mono text-[9px] text-fg-faint">
           internal
