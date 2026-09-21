@@ -25,7 +25,9 @@ env = environ.Env(
     # Sessions: idle expiry slides with activity, the absolute cap does not.
     SESSION_IDLE_TIMEOUT_HOURS=(int, 12),
     SESSION_ABSOLUTE_TIMEOUT_HOURS=(int, 24 * 7),
-    # Sign-in policy
+    # Who may sign in: whole domains ("yourcompany.com") and/or exact
+    # addresses ("you@gmail.com"). Empty means anybody, which check --deploy
+    # refuses to let pass quietly.
     ALLOWED_EMAIL_DOMAINS=(list, []),
     MAGIC_LINK_TTL_MINUTES=(int, 15),
     MAGIC_LINK_MAX_PER_EMAIL_PER_HOUR=(int, 5),

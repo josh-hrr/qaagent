@@ -131,7 +131,10 @@ regenerate.
    - `EMAIL_URL` — Resend: `smtp://resend:<api-key>@smtp.resend.com:587/?tls=True`
    - `DEFAULT_FROM_EMAIL` — a sender Resend has verified for your domain
    - `ALLOWED_EMAIL_DOMAINS` — who may sign in. **Leave this empty and anyone
-     who finds the URL can sign themselves in.**
+     who finds the URL can sign themselves in.** Entries are whole domains
+     (`yourcompany.com`) or exact addresses (`you@gmail.com`) — never add a
+     public domain like `gmail.com` to let one person in, because that admits
+     every account on it.
 3. Deploy. The build runs migrations and `check --deploy`, so a misconfiguration
    fails the deploy rather than a request.
 

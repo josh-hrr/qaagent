@@ -31,12 +31,29 @@ class SignInError(Exception):
 
 
 def email_domain_allowed(email: str) -> bool:
-    """Empty ALLOWED_EMAIL_DOMAINS means any domain — the default for local dev."""
+    """Who may sign in: a whole domain, or one exact address.
+
+    An entry containing "@" matches that address and nothing else. This exists
+    because the obvious workaround — adding ``gmail.com`` so one person can use
+    their own account — would admit every Gmail user on earth.
+
+    Empty ALLOWED_EMAIL_DOMAINS means anyone, which is the local-development
+    default and what ``accounts.W001`` refuses to let pass quietly in
+    production.
+    """
     allowed = settings.ALLOWED_EMAIL_DOMAINS
     if not allowed:
         return True
-    domain = email.strip().lower().rpartition("@")[2]
-    return domain in allowed
+
+    address = email.strip().lower()
+    domain = address.rpartition("@")[2]
+    for entry in allowed:
+        if "@" in entry:
+            if address == entry:
+                return True
+        elif domain == entry:
+            return True
+    return False
 
 
 def client_ip(request) -> str | None:

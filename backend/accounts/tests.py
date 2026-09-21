@@ -11,7 +11,7 @@ from django.urls import reverse
 from .apps import INSECURE_SECRET_KEY, check_sign_in_policy
 from .middleware import SESSION_STARTED_KEY
 from .models import MagicLinkToken, User
-from .services import SignInError, client_ip, consume_magic_link
+from .services import SignInError, client_ip, consume_magic_link, email_domain_allowed
 
 
 def link_token_from_last_email() -> str:
@@ -347,3 +347,33 @@ class ClientIpTests(TestCase):
         with override_settings(SECURE_PROXY_SSL_HEADER=("HTTP_X_FORWARDED_PROTO", "https")):
             ip = self.request_with(HTTP_X_FORWARDED_FOR="9.9.9.9, 10.0.0.5", REMOTE_ADDR="10.0.0.1")
         self.assertEqual(ip, "9.9.9.9")
+
+
+@override_settings(ALLOWED_EMAIL_DOMAINS=["yourcompany.com", "someone@gmail.com"])
+class SignInAllowListTests(TestCase):
+    """A domain admits everyone on it; an address admits one person."""
+
+    def test_a_listed_domain_lets_the_whole_company_in(self):
+        self.assertTrue(email_domain_allowed("anyone@yourcompany.com"))
+        self.assertTrue(email_domain_allowed("Anyone@YourCompany.com"))
+
+    def test_a_listed_address_admits_only_that_address(self):
+        self.assertTrue(email_domain_allowed("someone@gmail.com"))
+        # The whole point: listing one Gmail address must not admit Gmail.
+        self.assertFalse(email_domain_allowed("stranger@gmail.com"))
+
+    def test_everything_else_is_refused(self):
+        for address in ["someone@example.com", "someone@yourcompany.com.evil.net", "someone@sub.yourcompany.com"]:
+            with self.subTest(address=address):
+                self.assertFalse(email_domain_allowed(address))
+
+    @override_settings(ALLOWED_EMAIL_DOMAINS=[])
+    def test_an_empty_list_still_means_anyone(self):
+        self.assertTrue(email_domain_allowed("stranger@example.com"))
+
+    def test_the_sign_in_endpoint_refuses_an_address_off_the_list(self):
+        response = Client().post(
+            reverse("accounts:magic-link"), {"email": "stranger@gmail.com"}, "application/json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("domain", str(response.json()).lower())
