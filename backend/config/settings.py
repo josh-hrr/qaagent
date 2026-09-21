@@ -30,6 +30,7 @@ env = environ.Env(
     # refuses to let pass quietly.
     ALLOWED_EMAIL_DOMAINS=(list, []),
     MAGIC_LINK_TTL_MINUTES=(int, 15),
+    EMAIL_TIMEOUT_SECONDS=(int, 10),
     MAGIC_LINK_MAX_PER_EMAIL_PER_HOUR=(int, 5),
     MAGIC_LINK_MAX_PER_IP_PER_HOUR=(int, 20),
     # Encrypts third-party credentials at rest. Separate from SECRET_KEY on
@@ -256,6 +257,10 @@ SECURE_CSP = {
 # Development prints magic links to the console; set EMAIL_URL for real sending.
 
 vars().update(env.email_url("EMAIL_URL", default="consolemail://"))
+# Without this an unreachable SMTP server hangs the request until gunicorn
+# kills the worker: the sign-in button spins forever and nothing is logged.
+# With it, the send fails, the view returns 503 and the screen says so.
+EMAIL_TIMEOUT = env("EMAIL_TIMEOUT_SECONDS", default=10)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="QA Agent <qa-agent@localhost>")
 
 # --- Sign-in policy --------------------------------------------------------
