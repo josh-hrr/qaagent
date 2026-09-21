@@ -12,7 +12,21 @@ BACKEND_ONLY="${1:-}"
 if [ "$BACKEND_ONLY" != "--backend-only" ]; then
   echo "--- building the frontend"
   cd frontend
-  npm ci
+
+  # Vite 8 builds with rolldown, whose compiler is a native binary published as
+  # a per-platform optional dependency. The lockfile lists every platform, but
+  # `npm ci` can still skip optional packages (npm/cli#4828) — and the failure
+  # only shows up on Linux, as "Cannot find native binding", long after the
+  # install looked fine. So: install, then prove the binary is actually there,
+  # and rebuild from scratch the way npm itself recommends if it is not.
+  npm ci --include=optional --no-audit --no-fund
+
+  if [ ! -d node_modules/@rolldown/binding-linux-x64-gnu ]; then
+    echo "--- rolldown's linux binding is missing; reinstalling without the lockfile"
+    rm -rf node_modules package-lock.json
+    npm install --include=optional --no-audit --no-fund
+  fi
+
   npm run build
   cd ..
 fi
