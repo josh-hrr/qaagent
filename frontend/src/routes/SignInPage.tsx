@@ -330,8 +330,3 @@ function Callout({
     </div>
   );
 }
-
-function formatDomains(domains: string[]): string {
-  if (domains.length === 1) return `@${domains[0]}`;
-  return domains.map((d) => `@${d}`).join(", ");
-}
