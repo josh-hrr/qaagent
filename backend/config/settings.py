@@ -31,6 +31,7 @@ env = environ.Env(
     ALLOWED_EMAIL_DOMAINS=(list, []),
     MAGIC_LINK_TTL_MINUTES=(int, 15),
     EMAIL_TIMEOUT_SECONDS=(int, 10),
+    RESEND_API_KEY=(str, ""),
     MAGIC_LINK_MAX_PER_EMAIL_PER_HOUR=(int, 5),
     MAGIC_LINK_MAX_PER_IP_PER_HOUR=(int, 20),
     # Encrypts third-party credentials at rest. Separate from SECRET_KEY on
@@ -257,6 +258,13 @@ SECURE_CSP = {
 # Development prints magic links to the console; set EMAIL_URL for real sending.
 
 vars().update(env.email_url("EMAIL_URL", default="consolemail://"))
+
+# Render's free web services block outbound SMTP (25, 465, 587), so a sign-in
+# link can never leave the machine. Resend's HTTPS API is not blocked: set
+# RESEND_API_KEY and it is used instead of whatever EMAIL_URL says.
+RESEND_API_KEY = env("RESEND_API_KEY", default="")
+if RESEND_API_KEY:
+    EMAIL_BACKEND = "accounts.email_backends.ResendAPIBackend"
 # Without this an unreachable SMTP server hangs the request until gunicorn
 # kills the worker: the sign-in button spins forever and nothing is logged.
 # With it, the send fails, the view returns 503 and the screen says so.

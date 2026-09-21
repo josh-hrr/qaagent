@@ -9,9 +9,6 @@ the actual exception instead of leaving a spinner on a screen.
 
 from __future__ import annotations
 
-import smtplib
-import socket
-
 from django.conf import settings
 from django.core.mail import get_connection, send_mail
 from django.core.management.base import BaseCommand, CommandError
@@ -51,14 +48,14 @@ class Command(BaseCommand):
             connection.open()
             self.stdout.write(self.style.SUCCESS("  connection opened"))
             connection.close()
-        except (smtplib.SMTPException, socket.timeout, OSError) as exc:
-            # The three that actually happen: wrong credentials, a blocked
-            # port, and a host that does not resolve.
+        except Exception as exc:  # noqa: BLE001 - every backend fails differently
             raise CommandError(
                 f"Could not open a connection: {type(exc).__name__}: {exc}\n\n"
-                "  authentication failed  -> the API key in EMAIL_URL is wrong\n"
-                "  timed out              -> the port is blocked, or the host is wrong\n"
-                "  name resolution        -> check the host spelling in EMAIL_URL"
+                "  timed out        -> the SMTP port is blocked. Render's free instances\n"
+                "                      block 25, 465 and 587 outright; set RESEND_API_KEY\n"
+                "                      to send over HTTPS instead\n"
+                "  auth failed      -> the key or password is wrong\n"
+                "  name resolution  -> check the host spelling"
             ) from exc
 
         self.stdout.write(self.style.MIGRATE_HEADING("\nSending"))
@@ -70,11 +67,12 @@ class Command(BaseCommand):
                 recipient_list=[address],
                 fail_silently=False,
             )
-        except (smtplib.SMTPException, socket.timeout, OSError) as exc:
+        except Exception as exc:  # noqa: BLE001 - the provider's reason is the point
             raise CommandError(
-                f"Connected, but the send was refused: {type(exc).__name__}: {exc}\n\n"
+                f"The send was refused: {type(exc).__name__}: {exc}\n\n"
                 "  Most often the sender address is not verified with the provider.\n"
-                f"  DEFAULT_FROM_EMAIL is currently {settings.DEFAULT_FROM_EMAIL}"
+                f"  DEFAULT_FROM_EMAIL is currently {settings.DEFAULT_FROM_EMAIL}\n"
+                "  Resend's onboarding@resend.dev only delivers to your own account address."
             ) from exc
 
         if sent:

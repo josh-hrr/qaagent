@@ -128,7 +128,9 @@ regenerate.
      `python manage.py generate_encryption_key`. **Keep a copy.** Lose it and
      every stored Linear/Azure credential becomes unreadable.
    - `ANTHROPIC_API_KEY`
-   - `EMAIL_URL` — Resend: `smtp://resend:<api-key>@smtp.resend.com:587/?tls=True`
+   - `RESEND_API_KEY` — mail goes over Resend's **HTTPS API**, not SMTP:
+     Render's free instances block outbound ports 25, 465 and 587 outright, so
+     an SMTP send times out with nothing in the log
    - `DEFAULT_FROM_EMAIL` — a sender Resend has verified for your domain
    - `ALLOWED_EMAIL_DOMAINS` — who may sign in. **Leave this empty and anyone
      who finds the URL can sign themselves in.** Entries are whole domains
@@ -143,9 +145,23 @@ services must agree on it and on the encryption key.
 
 ### Email
 
-Magic links are the only way in, so mail is not optional. Resend's free tier
-(3,000/month) is far more than sign-in needs. SendGrid replaced its free plan
-with a 60-day trial — it would cost more than the rest of the stack.
+Magic links are the only way in, so mail is not optional.
+
+**Free Render instances block outbound SMTP** (ports 25, 465, 587) as an
+anti-spam measure, so any SMTP provider will simply time out. Set
+`RESEND_API_KEY` and `accounts.email_backends.ResendAPIBackend` sends over
+HTTPS instead, which nothing blocks. `EMAIL_URL` still works everywhere else —
+locally it stays `consolemail://`, printing links to the terminal.
+
+Check it from the Render shell rather than by guessing:
+
+```bash
+python manage.py mail_check you@yourcompany.com
+```
+
+It prints the settings in force, connects, sends, and names the likely cause of
+whatever fails. Resend's `onboarding@resend.dev` sender only delivers to your
+own account address until you verify a domain.
 
 ### Moving the local history across
 

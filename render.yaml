@@ -49,8 +49,8 @@ services:
         sync: false # generate_encryption_key. Keep a copy — losing it means reconnecting.
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: EMAIL_URL
-        sync: false # Resend: smtp://resend:<api-key>@smtp.resend.com:587/?tls=True
+      - key: RESEND_API_KEY
+        sync: false # Resend's HTTPS API. Free Render instances block SMTP ports.
       - key: DEFAULT_FROM_EMAIL
         sync: false # A sender Resend has verified, e.g. QA Agent <qa@yourdomain.com>
       - key: ALLOWED_EMAIL_DOMAINS
