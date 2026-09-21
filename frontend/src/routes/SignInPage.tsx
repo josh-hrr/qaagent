@@ -96,13 +96,14 @@ export function SignInPage() {
                 Sign in
               </h2>
               <p className="mb-7 text-[13.5px] text-fg-dimmer">
-                We email you a link that signs you in. No password to set or remember.
+                We email you a link that signs you in. No password to set or
+                remember.
               </p>
 
               {optionsFailed && (
                 <Callout tone="danger" className="mb-5">
-                  QA Agent is not responding. Try again in a moment, and tell whoever looks after it if
-                  this keeps happening.
+                  QA Agent is not responding. Try again in a moment, and tell
+                  whoever looks after it if this keeps happening.
                 </Callout>
               )}
 
@@ -139,11 +140,6 @@ export function SignInPage() {
                   }}
                   disabled={submitting}
                   error={error?.fieldError("email") ?? undefined}
-                  hint={
-                    options?.allowedEmailDomains.length
-                      ? `Accounts on ${formatDomains(options.allowedEmailDomains)} only.`
-                      : undefined
-                  }
                   required
                 />
 
@@ -274,8 +270,8 @@ function LinkSentPanel({
       </button>
 
       <Callout tone="neutral" className="mt-7" icon={<MailIcon size={14} />}>
-        Nothing in your inbox after a minute? Check spam, then try again — the previous link stops
-        working as soon as a new one is sent.
+        Nothing in your inbox after a minute? Check spam, then try again — the
+        previous link stops working as soon as a new one is sent.
       </Callout>
     </div>
   );
